@@ -1,0 +1,435 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Discord Dark Palette ── */
+  --color-discord-dark: #313338;
+  --color-discord-darker: #2b2d31;
+  --color-discord-darkest: #1e1f22;
+  --color-discord-sidebar: #2b2d31;
+  --color-discord-chat: #313338;
+  --color-discord-input: #1e1f22;
+
+  /* Accent */
+  --color-blurple: #5865F2;
+  --color-blurple-hover: #4752C4;
+  --color-blurple-light: rgba(88, 101, 242, 0.15);
+  --color-blurple-glow: rgba(88, 101, 242, 0.35);
+
+  /* Text */
+  --color-discord-white: #F2F3F5;
+  --color-discord-light: #DBDEE1;
+  --color-discord-muted: #949BA4;
+  --color-discord-faint: #6D6F78;
+
+  /* Borders */
+  --color-discord-border: #3f4147;
+  --color-discord-border-light: #4e5058;
+
+  /* Status */
+  --color-discord-green: #57F287;
+  --color-discord-red: #ED4245;
+  --color-discord-yellow: #FEE75C;
+  --color-discord-pink: #EB459E;
+
+  /* Legacy compat aliases (so existing Tailwind classes don't break) */
+  --color-cream: #313338;
+  --color-cream-dark: #2b2d31;
+  --color-warm-yellow: #5865F2;
+  --color-warm-yellow-hover: #4752C4;
+  --color-warm-yellow-light: rgba(88, 101, 242, 0.15);
+  --color-warm-yellow-glow: rgba(88, 101, 242, 0.35);
+  --color-ink: #F2F3F5;
+  --color-ink-light: #DBDEE1;
+  --color-slate: #949BA4;
+  --color-muted: #6D6F78;
+  --color-border-warm: #3f4147;
+  --color-success: #57F287;
+  --color-error: #ED4245;
+
+  --font-family-display: 'Inter', 'gg sans', system-ui, sans-serif;
+}
+
+/* Base */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-family-display);
+  background-color: var(--color-discord-dark);
+  color: var(--color-discord-white);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+::selection {
+  background-color: var(--color-blurple);
+  color: #ffffff;
+}
+
+/* Scrollbar — Discord style */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-discord-darkest);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-discord-border-light);
+}
+
+/* Keyframes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes bounceDown {
+
+  0%,
+  20%,
+  50%,
+  80%,
+  100% {
+    transform: translateY(0);
+  }
+
+  40% {
+    transform: translateY(10px);
+  }
+
+  60% {
+    transform: translateY(5px);
+  }
+}
+
+@keyframes pulseGlow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--color-blurple-glow);
+  }
+
+  50% {
+    box-shadow: 0 0 0 14px transparent;
+  }
+}
+
+@keyframes shake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-4px);
+  }
+
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slideRight {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes glow {
+
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+/* Utilities */
+@utility animate-fade-in-up {
+  animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@utility animate-fade-in {
+  animation: fadeIn 0.6s ease both;
+}
+
+@utility animate-scale-in {
+  animation: scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@utility animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@utility animate-bounce-down {
+  animation: bounceDown 2s ease infinite;
+}
+
+@utility animate-pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@utility animate-shake {
+  animation: shake 0.5s ease both;
+}
+
+@utility animate-slide-down {
+  animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@utility animate-slide-right {
+  animation: slideRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@utility animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+@keyframes gradientShift {
+
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@utility animate-gradient-shift {
+  animation: gradientShift 8s ease infinite;
+  background-size: 200% 200%;
+}
+
+@keyframes countUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility animate-count-up {
+  animation: countUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes tooltipIn {
+  from {
+    opacity: 0;
+    transform: translateX(-6px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@utility animate-tooltip-in {
+  animation: tooltipIn 0.14s ease-out both;
+}
+
+@utility delay-100 {
+  animation-delay: 100ms;
+}
+
+@utility delay-200 {
+  animation-delay: 200ms;
+}
+
+@utility delay-300 {
+  animation-delay: 300ms;
+}
+
+@utility delay-400 {
+  animation-delay: 400ms;
+}
+
+@utility delay-500 {
+  animation-delay: 500ms;
+}
+
+@utility delay-600 {
+  animation-delay: 600ms;
+}
+
+@utility delay-700 {
+  animation-delay: 700ms;
+}
+
+/* ── Workspace Switcher ──────────────────────────────────────────────────── */
+.workspace-switcher {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.workspace-switcher::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes wsIconIn {
+  from {
+    opacity: 0;
+    transform: scale(0.7) translateX(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+}
+
+.workspace-switcher button {
+  animation: wsIconIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Hide scrollbars utility */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Premium Styles ─────────────────────────────────────────────────────── */
+@keyframes premiumShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes premiumGlow {
+  0%, 100% { box-shadow: 0 0 6px 1px rgba(234, 179, 8, 0.25); }
+  50% { box-shadow: 0 0 12px 3px rgba(234, 179, 8, 0.4); }
+}
+
+@utility animate-premium-shimmer {
+  animation: premiumShimmer 3s linear infinite;
+}
+
+@utility animate-premium-glow {
+  animation: premiumGlow 2.5s ease-in-out infinite;
+}
+
+.premium-badge {
+  background: linear-gradient(110deg, #d4a017 0%, #f5d061 25%, #d4a017 50%, #f5d061 75%, #d4a017 100%);
+  background-size: 300% 100%;
+  animation: premiumShimmer 3s linear infinite;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.premium-ring {
+  border: 2.5px solid transparent;
+  background-image: linear-gradient(var(--color-discord-darker), var(--color-discord-darker)),
+                    linear-gradient(135deg, #d4a017, #f5d061, #d4a017);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  animation: premiumGlow 2.5s ease-in-out infinite;
+}
+
+.premium-card-accent {
+  border-left: 3px solid;
+  border-image: linear-gradient(to bottom, #d4a017, #f5d061) 1;
+}

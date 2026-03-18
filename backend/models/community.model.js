@@ -1,0 +1,55 @@
+import mongoose from "mongoose";
+
+const inviteCodeSchema = new mongoose.Schema({
+  code: { type: String, required: true },
+  usedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  expiresAt: { type: Date, default: null },
+  isUsed: { type: Boolean, default: false },
+}, { _id: true });
+
+const roleSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  permissions: {
+    viewChannels: { type: Boolean, default: false },
+    createChannels: { type: Boolean, default: false },
+    manageChannels: { type: Boolean, default: false },
+    manageRoles: { type: Boolean, default: false },
+    createEvents: { type: Boolean, default: false },
+    createInvite: { type: Boolean, default: false },
+    changeNickname: { type: Boolean, default: false },
+    manageNicknames: { type: Boolean, default: false },
+    kickMembers: { type: Boolean, default: false },
+    banMembers: { type: Boolean, default: false },
+    moderateContent: { type: Boolean, default: false },
+    warnMembers: { type: Boolean, default: false },
+    suspendMembers: { type: Boolean, default: false },
+    viewAuditLog: { type: Boolean, default: false },
+  },
+  createdAt: { type: Date, default: Date.now },
+}, { _id: true });
+
+const communitySchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  slug: { type: String, required: true, unique: true },
+  description: { type: String, default: "" },
+  icon: { type: String, default: "" },
+  bannerColor: { type: String, default: "" },
+  traits: { type: [String], default: [] },
+  profileDescription: { type: String, default: "" },
+  kind: { type: String, enum: ["friends", "community"], default: "community" },
+  template: { type: String, default: "custom" },
+  owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  members: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  inviteCodes: { type: [inviteCodeSchema], default: [] },
+  roles: { type: [roleSchema], default: [] },
+  blocklist: {
+    type: [{
+      value: { type: String, required: true, trim: true, lowercase: true },
+      createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+      createdAt: { type: Date, default: Date.now },
+    }],
+    default: [],
+  },
+}, { timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" } });
+
+export default mongoose.model("Community", communitySchema);
