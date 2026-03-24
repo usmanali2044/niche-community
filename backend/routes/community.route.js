@@ -1,5 +1,6 @@
 import express from "express";
 import { createCommunity, generateInvite, getInviteCodes, getMyCommunity, getMyCommunities, getAllCommunities, createInviteRequest, getInviteRequests, approveInviteRequest, rejectInviteRequest, getMembers, updateMemberRole, searchMembers, joinCommunity, getRoster, getCommunityProfile, updateCommunityProfile, deleteCommunity, kickMember, getRoles, createRole, updateRole, deleteRole, updateMemberRoles } from "../controllers/community.controller.js";
+import { sendServerInvite } from "../controllers/serverInvite.controller.js";
 import { verifyToken } from "../middleware/verifyToken.js";
 import { verifyCommunityAccess } from "../middleware/verifyCommunityAccess.js";
 
@@ -31,6 +32,8 @@ router.post("/join", verifyToken, joinCommunity);
 
 // Generate invite code + optionally email it (admin only)
 router.post("/:id/invites", verifyToken, verifyCommunityAccess, generateInvite);
+// Direct invite to an existing user (admin only)
+router.post("/:id/invites/direct", verifyToken, verifyCommunityAccess, sendServerInvite);
 
 // Get all invite codes for a community (admin only)
 router.get("/:id/invites", verifyToken, getInviteCodes);

@@ -25,6 +25,7 @@ import communityRoutes from './routes/community.route.js';
 import billingRoutes from './routes/billing.route.js';
 import friendRoutes from './routes/friend.route.js';
 import dmRoutes from './routes/dm.route.js';
+import serverInviteRoutes from './routes/serverInvite.route.js';
 import { stripeWebhook } from './controllers/billing.controller.js';
 import { ensureRootUser } from './utils/ensureRootUser.js';
 
@@ -65,6 +66,7 @@ app.use('/api/search', searchRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/dm', dmRoutes);
+app.use('/api/server-invites', serverInviteRoutes);
 
 const PORT = process.env.PORT || 3000;
 

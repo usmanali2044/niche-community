@@ -73,6 +73,26 @@ export const useCommunityStore = create((set, get) => ({
         }
     },
 
+    // Send a direct invite to an existing user
+    sendServerInvite: async (communityId, userId) => {
+        set({ isLoading: true, error: null, successMessage: null });
+        try {
+            const res = await apiFetch(`${API_URL}/${communityId}/invites/direct`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ userId }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'Failed to send invite');
+            set({ isLoading: false, successMessage: data.message || 'Invite sent' });
+            return data;
+        } catch (error) {
+            set({ error: error.message, isLoading: false });
+            throw error;
+        }
+    },
+
     // Fetch all invite codes for a community
     fetchInviteCodes: async (communityId) => {
         set({ isLoading: true, error: null });

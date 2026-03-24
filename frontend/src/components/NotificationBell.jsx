@@ -88,6 +88,14 @@ const NotificationBell = () => {
                         </>
                     );
                 }
+                if (notif.meta?.action === 'server_invite') {
+                    return (
+                        <>
+                            <span className="text-discord-light">You were invited to join </span>
+                            <span className="font-bold text-discord-white">{notif.meta?.communityName || 'a server'}</span>
+                        </>
+                    );
+                }
                 return (<><span className="text-discord-light">New server announcement from </span><span className="font-bold text-discord-white">{notif.meta?.senderName || 'Admin'}</span></>);
             case 'warning':
                 return <span className="text-discord-red font-semibold">You received a warning from a moderator</span>;
@@ -115,6 +123,14 @@ const NotificationBell = () => {
 
     const handleNotificationClick = async (notif) => {
         const meta = notif?.meta || {};
+        if (meta.action === 'server_invite') {
+            navigate('/feed?tab=invites');
+            if (!notif.readAt) {
+                markAsRead(notif._id).catch(() => { });
+            }
+            setOpen(false);
+            return;
+        }
         if (meta.communityId) {
             setActiveCommunity(meta.communityId);
         }

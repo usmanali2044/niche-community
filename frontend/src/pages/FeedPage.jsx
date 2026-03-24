@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Hash, Search, Users, Pin, HelpCircle, User, MessageCircle, Phone, MoreVertical, Mic, Headphones, Settings, Menu, X, Server, Compass } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useFeedStore } from '../stores/feedStore';
@@ -10,6 +10,7 @@ import WorkspaceSwitcher from '../components/WorkspaceSwitcher';
 import Sidebar from '../components/Sidebar';
 import { useChannelStore } from '../stores/channelStore';
 import { useFriendStore } from '../stores/friendStore';
+import { useServerInviteStore } from '../stores/serverInviteStore';
 import ProfilePopout from '../components/ProfilePopout';
 import MemberProfilePopout from '../components/MemberProfilePopout';
 import ProfileSettingsModal from '../components/ProfileSettingsModal';
@@ -46,8 +47,11 @@ const FeedPage = () => {
     const [showMobileServers, setShowMobileServers] = useState(false);
     const [mobileDirectorySignal, setMobileDirectorySignal] = useState(0);
     const [isServerSwitching, setIsServerSwitching] = useState(false);
-    const { user } = useAuthStore();
+    const [editChannelSignal, setEditChannelSignal] = useState(0);
+    const [pendingEditChannelId, setPendingEditChannelId] = useState(null);
+    const { user, setUser } = useAuthStore();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { uploadFile, fetchFeed } = useFeedStore();
     const { profile, updateProfile } = useProfileStore();
     const { activeCommunityId, setActiveCommunity } = useWorkspaceStore();
@@ -70,6 +74,15 @@ const FeedPage = () => {
         clearMessages,
         updatePresence: updateFriendPresence,
     } = useFriendStore();
+    const {
+        invites,
+        isLoading: isInviteLoading,
+        error: inviteError,
+        fetchInvites,
+        acceptInvite,
+        declineInvite,
+        clearError: clearInviteError,
+    } = useServerInviteStore();
     const { threadId, messages, openThread, fetchMessages, sendMessage, pushMessage } = useDmStore();
     const { fetchEvents, handleNewEvent, handleRsvpUpdate, handleDeleteEvent, handleUpdateEvent, handleStartEvent, handleEndEvent } = useEventStore();
     const [activeDm, setActiveDm] = useState(null);
@@ -95,9 +108,23 @@ const FeedPage = () => {
     }, [user?.memberships?.length]);
 
     useEffect(() => {
+        const tab = searchParams.get('tab');
+        if (tab === 'invites') {
+            setViewMode('friends');
+            setActiveTab('invites');
+        }
+    }, [searchParams]);
+
+    useEffect(() => {
         if (!activeCommunityId) return;
         fetchRoster();
     }, [activeCommunityId, fetchRoster]);
+
+    useEffect(() => {
+        if (!pendingEditChannelId || pendingEditChannelId !== activeChannelId) return;
+        setEditChannelSignal((v) => v + 1);
+        setPendingEditChannelId(null);
+    }, [pendingEditChannelId, activeChannelId]);
 
     useEffect(() => {
         if (!activeCommunityId) {
@@ -227,6 +254,12 @@ const FeedPage = () => {
     }, [fetchFriends, fetchRequests]);
 
     useEffect(() => {
+        if (viewMode !== 'friends' || activeTab !== 'invites') return;
+        fetchInvites().catch(() => { });
+        clearInviteError();
+    }, [viewMode, activeTab, fetchInvites, clearInviteError]);
+
+    useEffect(() => {
         setShowMobileSidebar(false);
         setShowMobileDmList(false);
         setShowMobileServers(false);
@@ -325,6 +358,16 @@ const FeedPage = () => {
     }, [roles, activeMembership?.roles]);
 
     const canEditChannel = ['admin', 'moderator'].includes(activeMembership?.role) || rolePermissions.manageChannels;
+
+    const handleOpenChannelSettings = (channel) => {
+        if (!channel?._id || !canEditChannel) return;
+        if (channel._id !== activeChannelId) {
+            setPendingEditChannelId(channel._id);
+            setActiveChannel(channel._id);
+            return;
+        }
+        setEditChannelSignal((v) => v + 1);
+    };
 
     const groupedMembers = useMemo(() => {
         const presenceOrder = { online: 0, dnd: 1, idle: 2, offline: 3 };
@@ -541,6 +584,7 @@ const FeedPage = () => {
                     onClose={() => setShowMobileSidebar(false)}
                     animateClassName={`${switchAnimBase} ${switchAnimClass}`}
                     onProfileClick={() => setShowProfilePopout(true)}
+                    onOpenChannelSettings={handleOpenChannelSettings}
                     onVoiceChannelClick={(channel) => {
                         if (!channel?._id) return;
                         if (activeVoiceChannel?._id === channel._id) {
@@ -705,6 +749,7 @@ const FeedPage = () => {
                 <ChannelChat
                     channel={activeChannel}
                     socket={socket}
+                    editSignal={editChannelSignal}
                     currentUser={{
                         id: user?._id,
                         displayName,
@@ -830,6 +875,17 @@ const FeedPage = () => {
                                     >
                                         Pending
                                     </button>
+                                    <button
+                                        onClick={() => setActiveTab('invites')}
+                                        className={`px-2 py-1 rounded-md text-xs font-semibold cursor-pointer ${
+                                            activeTab === 'invites' ? 'bg-discord-darkest text-discord-white' : 'text-discord-faint hover:bg-discord-darkest/60'
+                                        }`}
+                                    >
+                                        Invites
+                                        {invites.length > 0 && (
+                                            <span className="ml-1 text-[10px] text-discord-faint">({invites.length})</span>
+                                        )}
+                                    </button>
                                 </div>
                             </div>
                             <button
@@ -950,6 +1006,61 @@ const FeedPage = () => {
                                                     <p className="text-sm font-semibold text-discord-white">{friend.displayName}</p>
                                                     <p className="text-[11px] text-discord-faint">Pending</p>
                                                 </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'invites' && (
+                            <div className="flex-1 overflow-y-auto px-4 py-4">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-discord-faint mb-2">
+                                    Server Invites — {invites.length}
+                                </div>
+                                {inviteError && (
+                                    <div className="px-3 py-2 mb-3 text-xs text-discord-red bg-discord-red/10 border border-discord-red/20 rounded-md">
+                                        {inviteError}
+                                    </div>
+                                )}
+                                {isInviteLoading && (
+                                    <div className="px-3 py-4 text-xs text-discord-faint">Loading invites…</div>
+                                )}
+                                {!isInviteLoading && invites.length === 0 && (
+                                    <div className="px-3 py-4 text-xs text-discord-faint">No server invites yet.</div>
+                                )}
+                                <div className="space-y-1">
+                                    {invites.map((invite) => (
+                                        <div key={invite._id} className="w-full flex items-center justify-between px-3 py-2 rounded-md bg-discord-darkest/60">
+                                            <div className="flex items-center gap-3">
+                                                <div className="relative w-9 h-9 rounded-full bg-discord-darker flex items-center justify-center text-sm font-semibold text-discord-light">
+                                                    {invite.community?.icon ? (
+                                                        <img src={invite.community.icon} alt="" className="w-9 h-9 rounded-full object-cover" />
+                                                    ) : (
+                                                        (invite.community?.name || 'S').charAt(0).toUpperCase()
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-semibold text-discord-white">{invite.community?.name || 'Server'}</p>
+                                                    <p className="text-[11px] text-discord-faint">Invited by {invite.inviter?.name || 'Admin'}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={async () => {
+                                                        const data = await acceptInvite(invite._id);
+                                                        if (data?.user) setUser(data.user);
+                                                    }}
+                                                    className="px-3 py-1.5 rounded-md bg-discord-green text-xs font-semibold text-discord-darkest hover:bg-discord-green/90 cursor-pointer"
+                                                >
+                                                    Accept
+                                                </button>
+                                                <button
+                                                    onClick={async () => { await declineInvite(invite._id); }}
+                                                    className="px-3 py-1.5 rounded-md bg-discord-darkest text-xs font-semibold text-discord-faint hover:bg-discord-border-light/40 cursor-pointer"
+                                                >
+                                                    Decline
+                                                </button>
                                             </div>
                                         </div>
                                     ))}

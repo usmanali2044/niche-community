@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Palette, Pencil, X, LogOut } from 'lucide-react';
+import { Palette, Pencil, X, LogOut, Camera } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import { useFeedStore } from '../stores/feedStore';
+import { useDropzone } from 'react-dropzone';
 
 const BANNER_COLORS = [
     '#334155',
@@ -21,7 +23,6 @@ const SETTINGS_SECTIONS = [
     { label: 'Language', key: 'language' },
     { label: 'Data & Privacy', key: 'privacy' },
     { label: 'Family Center', key: 'family' },
-    { label: 'Notifications', key: 'notifications' },
 ];
 
 const BILLING_SECTIONS = [
@@ -36,6 +37,7 @@ const ProfileSettingsModal = ({ isOpen, onClose, profile, user, onSave }) => {
         pronouns: profile?.pronouns || '',
         bannerColor: profile?.bannerColor || '#3f4f4f',
         bio: profile?.bio || '',
+        avatar: profile?.avatar || '',
     }), [profile, user]);
 
     const [activeTab, setActiveTab] = useState('main');
@@ -44,7 +46,11 @@ const ProfileSettingsModal = ({ isOpen, onClose, profile, user, onSave }) => {
     const [pronouns, setPronouns] = useState(initial.pronouns);
     const [bannerColor, setBannerColor] = useState(initial.bannerColor);
     const [bio, setBio] = useState(initial.bio);
+    const [avatar, setAvatar] = useState(initial.avatar);
+    const [avatarUploading, setAvatarUploading] = useState(false);
+    const [avatarError, setAvatarError] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const { uploadFile } = useFeedStore();
     const [privacy, setPrivacy] = useState({
         improveData: profile?.dataPrivacy?.improveData ?? true,
         personalizeActivity: profile?.dataPrivacy?.personalizeActivity ?? true,
@@ -59,6 +65,8 @@ const ProfileSettingsModal = ({ isOpen, onClose, profile, user, onSave }) => {
         setPronouns(initial.pronouns);
         setBannerColor(initial.bannerColor);
         setBio(initial.bio);
+        setAvatar(initial.avatar);
+        setAvatarError('');
         setPrivacy({
             improveData: profile?.dataPrivacy?.improveData ?? true,
             personalizeActivity: profile?.dataPrivacy?.personalizeActivity ?? true,
@@ -67,6 +75,28 @@ const ProfileSettingsModal = ({ isOpen, onClose, profile, user, onSave }) => {
             voiceClips: profile?.dataPrivacy?.voiceClips ?? true,
         });
     }, [isOpen, initial]);
+
+    const onAvatarDrop = useCallback(async (acceptedFiles) => {
+        if (acceptedFiles.length === 0) return;
+        setAvatarUploading(true);
+        setAvatarError('');
+        try {
+            const url = await uploadFile(acceptedFiles[0]);
+            setAvatar(url);
+        } catch {
+            setAvatarError('Upload failed. Try again.');
+        } finally {
+            setAvatarUploading(false);
+        }
+    }, [uploadFile]);
+
+    const { getRootProps: getAvatarRootProps, getInputProps: getAvatarInputProps, isDragActive: isAvatarDragActive } = useDropzone({
+        onDrop: onAvatarDrop,
+        accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.gif', '.webp'] },
+        maxSize: 10 * 1024 * 1024,
+        maxFiles: 1,
+        multiple: false,
+    });
 
     if (!isOpen) return null;
 
@@ -80,6 +110,7 @@ const ProfileSettingsModal = ({ isOpen, onClose, profile, user, onSave }) => {
                 pronouns: pronouns.trim(),
                 bannerColor,
                 bio,
+                avatar,
                 dataPrivacy: privacy,
             });
         } finally {
@@ -289,6 +320,43 @@ const ProfileSettingsModal = ({ isOpen, onClose, profile, user, onSave }) => {
                                     </div>
 
                                     <div>
+                                        <label className="text-sm font-semibold text-discord-light">Profile Photo</label>
+                                        <div
+                                            {...getAvatarRootProps()}
+                                            className={`mt-3 rounded-xl border border-dashed px-4 py-3 transition ${
+                                                isAvatarDragActive ? 'border-blurple bg-blurple/10' : 'border-discord-border/60 bg-discord-darkest/60'
+                                            }`}
+                                        >
+                                            <input {...getAvatarInputProps()} />
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-14 h-14 rounded-full bg-discord-darkest border border-discord-border/60 overflow-hidden flex items-center justify-center text-sm font-semibold text-discord-light">
+                                                    {avatarUploading ? (
+                                                        <div className="w-5 h-5 rounded-full border-2 border-blurple border-t-transparent animate-spin" />
+                                                    ) : avatar ? (
+                                                        <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        (displayName || 'U').charAt(0).toUpperCase()
+                                                    )}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-sm text-discord-light font-semibold">
+                                                        {avatarUploading ? 'Uploading…' : 'Click to upload or drag and drop'}
+                                                    </p>
+                                                    <p className="text-[11px] text-discord-faint">
+                                                        JPG, PNG, GIF, or WEBP (max 10MB)
+                                                    </p>
+                                                </div>
+                                                <div className="w-9 h-9 rounded-lg bg-discord-darkest flex items-center justify-center text-discord-faint">
+                                                    <Camera className="w-4 h-4" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {avatarError && (
+                                            <p className="mt-2 text-xs text-discord-red">{avatarError}</p>
+                                        )}
+                                    </div>
+
+                                    <div>
                                         <label className="text-sm font-semibold text-discord-light">Display Name</label>
                                         <input
                                             value={displayName}
@@ -353,8 +421,8 @@ const ProfileSettingsModal = ({ isOpen, onClose, profile, user, onSave }) => {
                                         <div className="h-28" style={{ backgroundColor: bannerColor }} />
                                         <div className="px-5 pb-5 -mt-9">
                                             <div className="w-16 h-16 rounded-full bg-discord-darkest border-4 border-discord-darker overflow-hidden flex items-center justify-center">
-                                                {profile?.avatar ? (
-                                                    <img src={profile.avatar} alt="" className="w-full h-full object-cover" />
+                                                {avatar ? (
+                                                    <img src={avatar} alt="" className="w-full h-full object-cover" />
                                                 ) : (
                                                     <span className="text-lg font-bold text-discord-light">
                                                         {(displayName || 'U').charAt(0).toUpperCase()}

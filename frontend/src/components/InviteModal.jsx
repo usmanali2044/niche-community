@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Copy, X } from 'lucide-react';
 
-const InviteModal = ({ isOpen, onClose, communityName, friends = [], onGenerateInvite }) => {
+const InviteModal = ({ isOpen, onClose, communityName, friends = [], onGenerateInvite, onSendInvite }) => {
     const [email, setEmail] = useState('');
     const [inviteLink, setInviteLink] = useState('');
     const [loading, setLoading] = useState(false);
@@ -19,6 +19,20 @@ const InviteModal = ({ isOpen, onClose, communityName, friends = [], onGenerateI
             setMessage(data?.message || 'Invite created');
         } catch (err) {
             setMessage(err.message || 'Failed to create invite');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSendInvite = async (friend) => {
+        if (!friend?._id) return;
+        setLoading(true);
+        setMessage('');
+        try {
+            const data = await onSendInvite?.(friend._id);
+            setMessage(data?.message || `Invite sent to ${friend.displayName || 'friend'}`);
+        } catch (err) {
+            setMessage(err.message || 'Failed to send invite');
         } finally {
             setLoading(false);
         }
@@ -61,7 +75,7 @@ const InviteModal = ({ isOpen, onClose, communityName, friends = [], onGenerateI
                                 </div>
                             </div>
                             <button
-                                onClick={() => handleGenerate()}
+                                onClick={() => handleSendInvite(f)}
                                 disabled={loading}
                                 className="px-3 py-1.5 rounded-md bg-discord-darkest text-xs font-semibold text-discord-light hover:bg-discord-border-light/30 disabled:opacity-60 cursor-pointer"
                             >

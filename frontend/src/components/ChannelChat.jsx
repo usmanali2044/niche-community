@@ -19,7 +19,7 @@ const formatTime = (date) => {
     }
 };
 
-const ChannelChat = ({ channel, socket, currentUser, members = [], showPins, onClosePins, canEditChannel = false }) => {
+const ChannelChat = ({ channel, socket, currentUser, members = [], showPins, onClosePins, canEditChannel = false, editSignal = 0 }) => {
     const {
         messages,
         isLoading,
@@ -128,6 +128,13 @@ const ChannelChat = ({ channel, socket, currentUser, members = [], showPins, onC
         run();
         return () => { active = false; };
     }, [channel?._id, fetchMessages, socket, clearChannelState]);
+
+    useEffect(() => {
+        if (!editSignal) return;
+        if (!canEditChannel) return;
+        if (!channel?._id) return;
+        setShowEditModal(true);
+    }, [editSignal, canEditChannel, channel?._id]);
 
     useEffect(() => {
         if (!socket) return;

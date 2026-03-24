@@ -17,7 +17,7 @@ import EventCreateModal from './EventCreateModal';
 import EventDetailsModal from './EventDetailsModal';
 import VoiceConnectedBar from './VoiceConnectedBar';
 
-const Sidebar = ({ isOpen, onClose, onProfileClick, onVoiceChannelClick, voiceState, animateClassName = '' }) => {
+const Sidebar = ({ isOpen, onClose, onProfileClick, onVoiceChannelClick, onOpenChannelSettings, voiceState, animateClassName = '' }) => {
     const navigate = useNavigate();
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showServerMenu, setShowServerMenu] = useState(false);
@@ -36,7 +36,7 @@ const Sidebar = ({ isOpen, onClose, onProfileClick, onVoiceChannelClick, voiceSt
     const { activeCommunityId } = useWorkspaceStore();
     const { friends, fetchFriends } = useFriendStore();
     const { friends: rosterMembers, fetchRoster } = useRosterStore();
-    const { generateInvite } = useCommunityStore();
+    const { generateInvite, sendServerInvite } = useCommunityStore();
     const { events, fetchEvents, deleteEvent, startEvent, endEvent, handleStartEvent, handleEndEvent } = useEventStore();
     const activeMembership = user?.memberships?.find((m) => {
         const membershipCommunityId = typeof m.communityId === 'string' ? m.communityId : m.communityId?._id;
@@ -45,6 +45,7 @@ const Sidebar = ({ isOpen, onClose, onProfileClick, onVoiceChannelClick, voiceSt
     const [rolePermissions, setRolePermissions] = useState({});
     const canCreateChannels = ['admin', 'moderator'].includes(activeMembership?.role) || rolePermissions.createChannels || rolePermissions.manageChannels;
     const canInvite = ['admin', 'moderator'].includes(activeMembership?.role) || rolePermissions.createInvite;
+    const canEditChannel = ['admin', 'moderator'].includes(activeMembership?.role) || rolePermissions.manageChannels;
     const isFreeTier = (profile?.tier || 'free') === 'free';
     const canCreateEvents = ['admin', 'moderator'].includes(activeMembership?.role) || rolePermissions.createEvents;
     const canManageSettings = ['admin', 'moderator'].includes(activeMembership?.role)
@@ -223,6 +224,10 @@ const Sidebar = ({ isOpen, onClose, onProfileClick, onVoiceChannelClick, voiceSt
                     if (!activeCommunityId) throw new Error('No active server');
                     return generateInvite(activeCommunityId, email);
                 }}
+                onSendInvite={(userId) => {
+                    if (!activeCommunityId) throw new Error('No active server');
+                    return sendServerInvite(activeCommunityId, userId);
+                }}
             />
             <EventsModal
                 isOpen={showEventsModal}
@@ -321,7 +326,27 @@ const Sidebar = ({ isOpen, onClose, onProfileClick, onVoiceChannelClick, voiceSt
                             {isActive && (
                                 <div className="ml-auto flex items-center gap-1">
                                     <Users className="w-3.5 h-3.5 text-discord-faint" />
-                                    <Settings className="w-3.5 h-3.5 text-discord-faint" />
+                                    {canEditChannel && (
+                                        <span
+                                            role="button"
+                                            tabIndex={0}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onOpenChannelSettings?.(ch);
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    onOpenChannelSettings?.(ch);
+                                                }
+                                            }}
+                                            className="w-6 h-6 rounded-md hover:bg-discord-border-light/30 flex items-center justify-center transition-colors cursor-pointer"
+                                            title="Edit channel"
+                                        >
+                                            <Settings className="w-3.5 h-3.5 text-discord-faint" />
+                                        </span>
+                                    )}
                                 </div>
                             )}
                         </button>
