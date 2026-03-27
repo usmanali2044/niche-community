@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Phone, Video, Pin, UserPlus, Search, MoreVertical, Gift, Sticker, Smile, Send, UserX, Plus, Image as ImageIcon, X, Menu, Server } from 'lucide-react';
+import { Phone, Video, Pin, UserPlus, Search, MoreVertical, Smile, Send, UserX, Plus, Image as ImageIcon, X, Menu, Server } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
 
 const formatTime = (value) => {
@@ -179,8 +179,6 @@ const DmPanel = ({
                         className="flex-1 bg-transparent text-sm text-discord-white placeholder:text-discord-faint/60 outline-none"
                     />
                     <div className="flex items-center gap-1.5 text-discord-faint">
-                        <Gift className="w-4 h-4" />
-                        <Sticker className="w-4 h-4" />
                         <button
                             onClick={() => setShowEmoji((s) => !s)}
                             className="w-8 h-8 rounded-md hover:bg-discord-border-light/20 flex items-center justify-center cursor-pointer"

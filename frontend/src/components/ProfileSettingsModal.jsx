@@ -146,13 +146,6 @@ const ProfileSettingsModal = ({ isOpen, onClose, profile, user, onSave }) => {
                             </div>
                             <Pencil className="w-4 h-4 text-discord-faint" />
                         </div>
-                        <div className="relative">
-                            <input
-                                type="text"
-                                placeholder="Search"
-                                className="w-full rounded-lg bg-discord-darkest text-xs text-discord-white placeholder:text-discord-faint/60 px-3 py-2 border border-discord-border/60 focus:outline-none focus:border-blurple"
-                            />
-                        </div>
                         <div>
                             <p className="text-xs uppercase tracking-[0.16em] text-discord-faint mb-2">User Settings</p>
                             <div className="space-y-1">
