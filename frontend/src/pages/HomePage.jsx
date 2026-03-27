@@ -23,8 +23,6 @@ import {
     Star,
     ChevronDown,
     ChevronRight,
-    Mail,
-    MapPin,
     ExternalLink,
     Play,
     Shield,
@@ -112,6 +110,7 @@ const HomePage = () => {
     const navRef = useRef(null);
     const statsRef = useRef(null);
     const featuresRef = useRef(null);
+    const noAdsRef = useRef(null);
     const aboutRef = useRef(null);
     const testimonialsRef = useRef(null);
     const ctaRef = useRef(null);
@@ -236,6 +235,16 @@ const HomePage = () => {
                     }
                 }
 
+                // ── No Ads Section ──
+                if (noAdsRef.current) {
+                    scrollReveal(
+                        noAdsRef.current.querySelectorAll('.noads-item'),
+                        noAdsRef.current,
+                        { y: 50, opacity: 0 },
+                        { stagger: 0.12, duration: 0.8, ease: 'power3.out' }
+                    );
+                }
+
                 // ── Testimonials ──
                 if (testimonialsRef.current) {
                     scrollReveal(
@@ -293,7 +302,7 @@ const HomePage = () => {
                     const cGrid = contactRef.current.querySelector('.contact-grid');
                     if (cGrid) {
                         scrollReveal(
-                            contactRef.current.querySelectorAll('.contact-card'),
+                            contactRef.current.querySelectorAll('.contact-item'),
                             cGrid,
                             { y: 50, scale: 0.9 },
                             { stagger: 0.12, duration: 0.7, ease: 'back.out(1.4)' }
@@ -694,7 +703,7 @@ const HomePage = () => {
                     {/* Feature cards */}
                     <div className="feature-grid">
                         <div
-                            className="feature-panel"
+                            className="feature-panel feature-card"
                             style={{
                                 '--panel-from': featureHero.panelFrom,
                                 '--panel-to': featureHero.panelTo,
@@ -717,6 +726,71 @@ const HomePage = () => {
                                     <h3 className="feature-panel__title">{featureHero.title}</h3>
                                     <p className="feature-panel__desc">{featureHero.desc}</p>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* ═══════════  NO ADS SECTION  ═══════════ */}
+            <section ref={noAdsRef} className="relative py-20 sm:py-28">
+                <div className="max-w-6xl mx-auto px-5 sm:px-8">
+                    <div className="grid md:grid-cols-[1.05fr_0.95fr] gap-10 items-center">
+                        <div className="noads-item">
+                            <p className="text-xs font-bold uppercase tracking-[0.2em] text-blurple mb-3">Privacy First</p>
+                            <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white mb-4">
+                                No ads. No trackers. No kidding.
+                            </h2>
+                            <p className="text-base text-discord-muted leading-relaxed max-w-xl">
+                                There are no ads, no affiliate marketers, and no creepy tracking in CircleCore.
+                                Focus on real conversations with the people who matter to you.
+                            </p>
+                        </div>
+
+                        <div className="relative noads-item">
+                            <div className="rounded-3xl overflow-hidden border border-white/10 shadow-[0_18px_50px_rgba(8,8,12,0.35)] bg-[#8D64F6]">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" className="w-full h-full" style={{ backgroundColor: '#8D64F6' }}>
+                                    <defs>
+                                        <pattern id="dots" x="0" y="0" width="12" height="12" patternUnits="userSpaceOnUse">
+                                            <circle cx="2" cy="2" r="1.5" fill="#181818" />
+                                        </pattern>
+                                    </defs>
+                                    <rect x="320" y="120" width="120" height="80" fill="url(#dots)" />
+                                    <rect x="590" y="310" width="60" height="130" fill="url(#dots)" />
+                                    <rect x="200" y="450" width="170" height="70" fill="url(#dots)" />
+                                    <g transform="translate(130, 110)">
+                                        <rect width="190" height="210" fill="#EBEBEB" stroke="#181818" strokeWidth="4" />
+                                        <line x1="20" y1="50" x2="110" y2="50" stroke="#181818" strokeWidth="14" />
+                                        <rect x="20" y="150" width="100" height="30" fill="#2B64F5" />
+                                    </g>
+                                    <g transform="translate(470, 125)">
+                                        <rect width="180" height="170" fill="#EBEBEB" stroke="#181818" strokeWidth="4" />
+                                        <line x1="60" y1="40" x2="150" y2="40" stroke="#181818" strokeWidth="4" />
+                                        <line x1="60" y1="60" x2="130" y2="60" stroke="#181818" strokeWidth="4" />
+                                    </g>
+                                    <rect x="410" y="150" width="125" height="45" fill="#2B64F5" stroke="#181818" strokeWidth="4" />
+                                    <g transform="translate(430, 360)">
+                                        <rect width="160" height="100" fill="#EBEBEB" stroke="#181818" strokeWidth="4" />
+                                        <circle cx="30" cy="35" r="9" fill="#181818" />
+                                        <line x1="50" y1="35" x2="110" y2="35" stroke="#181818" strokeWidth="4" />
+                                    </g>
+                                    <g transform="translate(170, 350)">
+                                        <rect width="240" height="110" fill="#EBEBEB" stroke="#181818" strokeWidth="4" />
+                                        <line x1="20" y1="35" x2="160" y2="35" stroke="#181818" strokeWidth="5" />
+                                        <line x1="20" y1="55" x2="100" y2="55" stroke="#181818" strokeWidth="5" />
+                                        <rect x="0" y="75" width="240" height="35" fill="#2B64F5" stroke="#181818" strokeWidth="4" />
+                                    </g>
+                                    <g transform="translate(230, 195)">
+                                        <rect width="330" height="210" fill="#EBEBEB" stroke="#181818" strokeWidth="4" />
+                                        <line x1="65" y1="60" x2="265" y2="60" stroke="#181818" strokeWidth="5" />
+                                        <line x1="90" y1="85" x2="240" y2="85" stroke="#181818" strokeWidth="5" />
+                                        <rect x="90" y="125" width="150" height="35" fill="#2B64F5" />
+                                    </g>
+                                    <g stroke="#181818" strokeWidth="14" fill="none" strokeLinecap="butt">
+                                        <circle cx="400" cy="300" r="225" />
+                                        <line x1="559" y1="141" x2="241" y2="459" />
+                                    </g>
+                                </svg>
                             </div>
                         </div>
                     </div>
@@ -869,35 +943,71 @@ const HomePage = () => {
             </section>
 
             {/* ═══════════  CONTACT SECTION  ═══════════ */}
-            <section ref={contactRef} id="contact" className="relative py-20 sm:py-28">
+            <section ref={contactRef} id="contact" className="relative py-20 sm:py-28 overflow-hidden" style={{ backgroundColor: '#7B6CF6' }}>
+                <div className="contact-ambience" aria-hidden="true">
+                    <div className="contact-orb contact-orb--one" />
+                    <div className="contact-orb contact-orb--two" />
+                    <div className="contact-orb contact-orb--three" />
+                    <div className="contact-spark contact-spark--one" />
+                    <div className="contact-spark contact-spark--two" />
+                </div>
                 <div className="max-w-5xl mx-auto px-5 sm:px-8">
                     <div className="contact-header text-center mb-12">
-                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-blurple mb-3">Contact</p>
+                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/80 mb-3">Contact</p>
                         <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white mb-4">
                             Get in touch
                         </h2>
-                        <p className="text-base text-discord-muted max-w-md mx-auto">
-                            Have questions or need help? We'd love to hear from you.
+                        <p className="text-base text-white/85 max-w-md mx-auto leading-relaxed">
+                            <span className="block">Have questions or need help?</span>
+                            <span className="block">We’d love to hear from you.</span>
                         </p>
                     </div>
 
-                    <div className="contact-grid grid sm:grid-cols-3 gap-4">
-                        {[
-                            { icon: Mail, title: 'Email Us', desc: 'hello@circlecore.io', color: 'text-blue-400', bg: 'from-blue-500/20 to-blue-600/10' },
-                            { icon: MessageSquare, title: 'Community', desc: 'Join our public forum', color: 'text-emerald-400', bg: 'from-emerald-500/20 to-emerald-600/10' },
-                            { icon: MapPin, title: 'Location', desc: 'Worldwide & Remote', color: 'text-purple-400', bg: 'from-purple-500/20 to-purple-600/10' },
-                        ].map((contact) => (
-                            <div key={contact.title}
-                                className="contact-card bg-discord-darker/80 border border-discord-border/50 rounded-xl p-6 text-center
-                                    hover:border-discord-border transition-all duration-300 group cursor-pointer">
-                                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${contact.bg} flex items-center justify-center mx-auto mb-4
-                                    group-hover:scale-110 transition-transform duration-300`}>
-                                    <contact.icon className={`w-5 h-5 ${contact.color}`} strokeWidth={2} />
-                                </div>
-                                <h3 className="text-sm font-bold text-white mb-1">{contact.title}</h3>
-                                <p className="text-xs text-discord-muted">{contact.desc}</p>
+                    <div className="contact-grid grid md:grid-cols-[1fr_1fr] gap-8 items-center">
+                        <div className="contact-item space-y-6">
+                            <div className="rounded-2xl border border-white/15 bg-[#1f2026]/90 px-6 py-6 min-h-[140px] flex flex-col justify-center">
+                                <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/70 mb-1">Community</p>
+                                <p className="text-base font-semibold text-white">Join our public forum</p>
+                                <p className="text-xs text-white/60 mt-1 leading-relaxed">Announcements • Roadmap • Feedback</p>
                             </div>
-                        ))}
+                        </div>
+                        <div className="contact-item">
+                            <div className="contact-illustration rounded-3xl overflow-hidden border border-white/15 shadow-[0_18px_50px_rgba(8,8,12,0.35)] bg-[#5C6AF7]">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" className="w-full h-full" style={{ backgroundColor: '#5C6AF7' }}>
+                                    <defs>
+                                        <pattern id="dots-contact" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
+                                            <circle cx="2" cy="2" r="1.3" fill="#1B1E25" />
+                                        </pattern>
+                                        <clipPath id="globe-clip">
+                                            <circle cx="400" cy="320" r="195" />
+                                        </clipPath>
+                                    </defs>
+                                    <circle cx="410" cy="330" r="195" fill="url(#dots-contact)" />
+                                    <circle cx="400" cy="320" r="195" fill="#96B6F5" />
+                                    <g clipPath="url(#globe-clip)">
+                                        <path d="M180 200 L 210 180 L 240 190 L 260 170 L 280 175 L 290 150 L 320 160 L 340 145 L 360 165 L 380 180 L 370 200 L 390 220 L 380 240 L 350 245 L 340 270 L 320 280 L 300 290 L 280 285 L 260 250 L 230 230 Z" fill="#2D5DF6"/>
+                                        <path d="M260 140 L 280 120 L 310 130 L 320 150 L 290 155 Z" fill="#2D5DF6"/>
+                                        <path d="M350 110 L 380 100 L 410 130 L 420 160 L 390 175 L 360 140 Z" fill="#2D5DF6"/>
+                                        <path d="M290 300 L 320 295 L 340 310 L 380 320 L 400 340 L 420 370 L 400 420 L 380 470 L 360 500 L 340 460 L 330 420 L 310 360 L 295 330 Z" fill="#2D5DF6"/>
+                                        <path d="M430 170 L 450 150 L 480 145 L 520 150 L 560 165 L 580 190 L 590 220 L 580 250 L 550 260 L 510 240 L 480 220 L 450 210 Z" fill="#2D5DF6"/>
+                                        <path d="M440 240 L 470 230 L 500 240 L 530 260 L 550 300 L 540 350 L 500 410 L 470 370 L 460 330 L 430 280 Z" fill="#2D5DF6"/>
+                                        <path d="M 230 500 Q 400 460 570 500 L 500 550 L 300 550 Z" fill="#2D5DF6" />
+                                        <circle cx="230" cy="300" r="4" fill="#2D5DF6" />
+                                        <circle cx="245" cy="320" r="3" fill="#2D5DF6" />
+                                        <circle cx="220" cy="340" r="5" fill="#2D5DF6" />
+                                        <circle cx="420" cy="220" r="4" fill="#2D5DF6" />
+                                        <circle cx="435" cy="240" r="6" fill="#2D5DF6" />
+                                    </g>
+                                    <circle cx="400" cy="320" r="195" fill="url(#dots-contact)" />
+                                    <circle cx="400" cy="320" r="195" fill="none" stroke="#1B1E25" strokeWidth="5" />
+                                    <g fill="#E6E1DF" stroke="#1B1E25" strokeWidth="4" strokeLinejoin="round">
+                                        <path d="M 210 70 h 140 a 25 25 0 0 1 25 25 v 0 a 25 25 0 0 1 -25 25 h -100 q -5 60 -10 90 q -10 -60 -15 -90 h -15 a 25 25 0 0 1 -25 -25 v 0 a 25 25 0 0 1 25 -25 Z" />
+                                        <path d="M 305 230 h 150 a 25 25 0 0 1 25 25 v 0 a 25 25 0 0 1 -25 25 h -110 q -5 60 10 120 q -20 -80 -25 -120 h -25 a 25 25 0 0 1 -25 -25 v 0 a 25 25 0 0 1 25 -25 Z" />
+                                        <path d="M 445 140 h 130 a 25 25 0 0 1 25 25 v 0 a 25 25 0 0 1 -25 25 h -15 q -5 40 -20 80 q 5 -40 5 -80 h -100 a 25 25 0 0 1 -25 -25 v 0 a 25 25 0 0 1 25 -25 Z" />
+                                    </g>
+                                </svg>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
