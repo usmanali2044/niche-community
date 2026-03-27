@@ -387,44 +387,14 @@ const HomePage = () => {
         { value: '99.9%', label: 'Uptime', icon: Zap },
     ];
 
-    const features = [
-        {
-            icon: Hash,
-            title: 'Organized Channels',
-            desc: 'Keep conversations organized with topic-based channels. Text, voice, and media — all in one place.',
-            color: 'from-blue-500 to-cyan-500',
-        },
-        {
-            icon: Lock,
-            title: 'Invite-Only Access',
-            desc: 'Control exactly who joins your community. Invite codes ensure only the right people get in.',
-            color: 'from-emerald-500 to-teal-500',
-        },
-        {
-            icon: Zap,
-            title: 'Real-Time Everything',
-            desc: 'Live feeds, instant reactions, and real-time notifications keep your community buzzing.',
-            color: 'from-amber-500 to-orange-500',
-        },
-        {
-            icon: ShieldCheck,
-            title: 'Powerful Moderation',
-            desc: 'Auto-flag content, manage reports, and keep your space safe with built-in moderation tools.',
-            color: 'from-rose-500 to-pink-500',
-        },
-        {
-            icon: Calendar,
-            title: 'Events & Meetups',
-            desc: 'Schedule events, manage RSVPs, and bring your community together — online or IRL.',
-            color: 'from-violet-500 to-purple-500',
-        },
-        {
-            icon: Award,
-            title: 'Roles & Reputation',
-            desc: 'Assign roles, track reputation, and reward your most engaged community members.',
-            color: 'from-indigo-500 to-blue-500',
-        },
-    ];
+    const featureHero = {
+        title: 'Make your community feel alive',
+        desc: 'Invite‑only access, real‑time updates, events, and moderation — all in one clean, powerful space built for focused communities.',
+        panelFrom: '#5b6af5',
+        panelTo: '#8b3df7',
+        mediaFrom: '#5c1a4a',
+        mediaTo: '#ea4bc1',
+    };
 
     const testimonials = [
         {
@@ -722,21 +692,33 @@ const HomePage = () => {
                     </div>
 
                     {/* Feature cards */}
-                    <div className="feature-grid grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {features.map((feature, i) => (
-                            <div
-                                key={feature.title}
-                                className="feature-card group relative bg-discord-darker/80 hover:bg-discord-darker border border-discord-border/50 hover:border-discord-border
-                                    rounded-xl p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/10"
-                            >
-                                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-4
-                                    shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                                    <feature.icon className="w-5 h-5 text-white" strokeWidth={2} />
+                    <div className="feature-grid">
+                        <div
+                            className="feature-panel"
+                            style={{
+                                '--panel-from': featureHero.panelFrom,
+                                '--panel-to': featureHero.panelTo,
+                                '--media-from': featureHero.mediaFrom,
+                                '--media-to': featureHero.mediaTo,
+                            }}
+                        >
+                            <div className="feature-panel__inner">
+                                <div className="feature-panel__media">
+                                    <div className="feature-panel__window">
+                                        <div className="feature-panel__bar" />
+                                        <div className="feature-panel__line" />
+                                        <div className="feature-panel__line short" />
+                                        <div className="feature-panel__line tiny" />
+                                    </div>
+                                    <div className="feature-panel__pill">Invite Only</div>
                                 </div>
-                                <h3 className="text-base font-bold text-white mb-2">{feature.title}</h3>
-                                <p className="text-sm text-discord-muted leading-relaxed">{feature.desc}</p>
+                                <div className="feature-panel__copy">
+                                    <p className="feature-panel__kicker">CircleCore Features</p>
+                                    <h3 className="feature-panel__title">{featureHero.title}</h3>
+                                    <p className="feature-panel__desc">{featureHero.desc}</p>
+                                </div>
                             </div>
-                        ))}
+                        </div>
                     </div>
                 </div>
             </section>
