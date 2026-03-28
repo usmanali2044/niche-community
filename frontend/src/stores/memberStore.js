@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiFetch } from './apiFetch';
 
 export const useMemberStore = create((set, get) => ({
     members: [],
@@ -9,7 +10,7 @@ export const useMemberStore = create((set, get) => ({
     fetchMembers: async (communityId) => {
         set({ isLoading: true, error: null });
         try {
-            const res = await fetch(`/api/communities/${communityId}/members`, {
+            const res = await apiFetch(`/api/communities/${communityId}/members`, {
                 credentials: 'include',
                 headers: { 'x-community-id': communityId },
             });
@@ -32,7 +33,7 @@ export const useMemberStore = create((set, get) => ({
         }));
 
         try {
-            const res = await fetch(`/api/communities/${communityId}/members/${userId}/role`, {
+            const res = await apiFetch(`/api/communities/${communityId}/members/${userId}/role`, {
                 method: 'PUT',
                 credentials: 'include',
                 headers: {
@@ -59,7 +60,7 @@ export const useMemberStore = create((set, get) => ({
         }));
 
         try {
-            const res = await fetch(`/api/communities/${communityId}/members/${userId}`, {
+            const res = await apiFetch(`/api/communities/${communityId}/members/${userId}`, {
                 method: 'DELETE',
                 credentials: 'include',
                 headers: { 'x-community-id': communityId },
@@ -83,7 +84,7 @@ export const useMemberStore = create((set, get) => ({
         }));
 
         try {
-            const res = await fetch(`/api/communities/${communityId}/members/${userId}/roles`, {
+            const res = await apiFetch(`/api/communities/${communityId}/members/${userId}/roles`, {
                 method: 'PUT',
                 credentials: 'include',
                 headers: {

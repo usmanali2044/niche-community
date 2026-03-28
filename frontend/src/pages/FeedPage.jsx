@@ -23,6 +23,7 @@ import ChannelChat from '../components/ChannelChat';
 import VoiceAudioPlayer from '../components/VoiceAudioPlayer';
 import VoiceVideoPlayer from '../components/VoiceVideoPlayer';
 import { useEventStore } from '../stores/eventStore';
+import { apiFetch } from '../stores/apiFetch';
 
 const presenceColor = (presence) => {
     if (presence === 'dnd') return 'bg-red-500';
@@ -141,7 +142,7 @@ const FeedPage = () => {
         let cancelled = false;
         const fetchRoles = async () => {
             try {
-                const res = await fetch(`/api/communities/${activeCommunityId}/roles`, {
+                const res = await apiFetch(`/api/communities/${activeCommunityId}/roles`, {
                     credentials: 'include',
                     headers: { 'x-community-id': activeCommunityId },
                 });

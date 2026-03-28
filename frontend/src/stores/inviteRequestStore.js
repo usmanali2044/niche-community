@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiFetch } from './apiFetch';
 
 export const useInviteRequestStore = create((set, get) => ({
     requests: [],
@@ -8,7 +9,7 @@ export const useInviteRequestStore = create((set, get) => ({
     requestInvite: async (communityId, message = '') => {
         set({ isLoading: true, error: null });
         try {
-            const res = await fetch(`/api/communities/${communityId}/invite-requests`, {
+            const res = await apiFetch(`/api/communities/${communityId}/invite-requests`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
@@ -27,7 +28,7 @@ export const useInviteRequestStore = create((set, get) => ({
     fetchRequests: async (communityId) => {
         set({ isLoading: true, error: null });
         try {
-            const res = await fetch(`/api/communities/${communityId}/invite-requests`, {
+            const res = await apiFetch(`/api/communities/${communityId}/invite-requests`, {
                 credentials: 'include',
                 headers: { 'x-community-id': communityId },
             });
@@ -44,7 +45,7 @@ export const useInviteRequestStore = create((set, get) => ({
     approveRequest: async (communityId, requestId) => {
         set({ isLoading: true, error: null });
         try {
-            const res = await fetch(`/api/communities/${communityId}/invite-requests/${requestId}/approve`, {
+            const res = await apiFetch(`/api/communities/${communityId}/invite-requests/${requestId}/approve`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'x-community-id': communityId },
@@ -65,7 +66,7 @@ export const useInviteRequestStore = create((set, get) => ({
     rejectRequest: async (communityId, requestId) => {
         set({ isLoading: true, error: null });
         try {
-            const res = await fetch(`/api/communities/${communityId}/invite-requests/${requestId}/reject`, {
+            const res = await apiFetch(`/api/communities/${communityId}/invite-requests/${requestId}/reject`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'x-community-id': communityId },

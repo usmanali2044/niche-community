@@ -5,6 +5,7 @@ import { useChannelStore } from '../stores/channelStore';
 import { useAuthStore } from '../stores/authStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useProfileStore } from '../stores/profileStore';
+import { apiFetch } from '../stores/apiFetch';
 import ChannelCreateModal from './ChannelCreateModal';
 import ServerMenu from './ServerMenu';
 import InviteModal from './InviteModal';
@@ -72,7 +73,7 @@ const Sidebar = ({ isOpen, onClose, onProfileClick, onVoiceChannelClick, onOpenC
         let cancelled = false;
         const fetchRoles = async () => {
             try {
-                const res = await fetch(`/api/communities/${activeCommunityId}/roles`, {
+                const res = await apiFetch(`/api/communities/${activeCommunityId}/roles`, {
                     credentials: 'include',
                     headers: { 'x-community-id': activeCommunityId },
                 });
