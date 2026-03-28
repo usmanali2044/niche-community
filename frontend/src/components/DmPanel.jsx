@@ -175,6 +175,13 @@ const DmPanel = ({
                     <input
                         value={value}
                         onChange={(e) => { onChange(e.target.value); onTyping?.(); }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                if (e.nativeEvent?.isComposing) return;
+                                e.preventDefault();
+                                onSend?.();
+                            }
+                        }}
                         placeholder={`Message @${headerTitle}`}
                         className="flex-1 bg-transparent text-sm text-discord-white placeholder:text-discord-faint/60 outline-none"
                     />

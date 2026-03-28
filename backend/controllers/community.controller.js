@@ -324,6 +324,8 @@ export const createCommunity = async (req, res) => {
         }
 
         const normalizedDescription = description?.trim() || "";
+        const normalizedTemplate = (template || "custom").toLowerCase();
+        const normalizedKind = ["friends", "community"].includes(kind) ? kind : "community";
 
         const community = await Community.create({
             name: name.trim(),
@@ -331,7 +333,7 @@ export const createCommunity = async (req, res) => {
             description: normalizedDescription,
             profileDescription: normalizedDescription,
             icon: icon || "",
-            kind: ["friends", "community"].includes(kind) ? kind : "community",
+            kind: normalizedKind,
             template: template || "custom",
             owner: req.userId,
             members: [req.userId],
@@ -349,12 +351,64 @@ export const createCommunity = async (req, res) => {
             .select("-password")
             .populate("memberships.communityId", "name slug icon");
 
-        // Default channels
-        const defaultChannels = [
-            { name: "general", description: "General chat", type: "text" },
-            { name: "announcements", description: "Official announcements", type: "announcement" },
-            { name: "general-voice", description: "General voice channel", type: "voice" },
-        ];
+        const templateChannels = {
+            gaming: [
+                { name: "lobby", description: "General game chat", type: "text" },
+                { name: "lfg", description: "Find teammates and squads", type: "text" },
+                { name: "1v1-text", description: "Challenge and setup duels", type: "text" },
+                { name: "highlights", description: "Clips, wins, and hype", type: "text" },
+                { name: "general-voice", description: "Main voice channel", type: "voice" },
+                { name: "1v1-voice", description: "Duel voice channel", type: "voice" },
+                { name: "squad-voice", description: "Team voice channel", type: "voice" },
+            ],
+            friends: [
+                { name: "hangout", description: "Daily chat and updates", type: "text" },
+                { name: "memes", description: "Share memes and laughs", type: "text" },
+                { name: "plans", description: "Plan meetups and games", type: "text" },
+                { name: "chill-voice", description: "Casual voice hangouts", type: "voice" },
+                { name: "party-voice", description: "Group voice room", type: "voice" },
+            ],
+            study: [
+                { name: "study-chat", description: "Study discussion", type: "text" },
+                { name: "resources", description: "Notes, links, and guides", type: "text" },
+                { name: "assignments", description: "Homework and deadlines", type: "text" },
+                { name: "focus-room", description: "Quiet focus voice", type: "voice" },
+                { name: "study-group", description: "Group study voice", type: "voice" },
+            ],
+            school: [
+                { name: "announcements", description: "Club announcements", type: "announcement" },
+                { name: "club-chat", description: "General club chat", type: "text" },
+                { name: "events", description: "Event planning", type: "text" },
+                { name: "resources", description: "Shared resources", type: "text" },
+                { name: "meetings", description: "Club meetings voice", type: "voice" },
+            ],
+        };
+
+        const kindChannels = {
+            friends: [
+                { name: "friends-chat", description: "Chat with your friends", type: "text" },
+                { name: "media", description: "Photos and clips", type: "text" },
+                { name: "game-night", description: "Plan game nights", type: "text" },
+                { name: "friends-voice", description: "Friends voice channel", type: "voice" },
+                { name: "hangout-voice", description: "Casual hangout voice", type: "voice" },
+            ],
+            community: [
+                { name: "welcome", description: "Start here", type: "text" },
+                { name: "announcements", description: "Community updates", type: "announcement" },
+                { name: "general", description: "Community chat", type: "text" },
+                { name: "events", description: "Upcoming events", type: "text" },
+                { name: "general-voice", description: "Community voice", type: "voice" },
+            ],
+        };
+
+        const defaultChannels =
+            templateChannels[normalizedTemplate] ||
+            kindChannels[normalizedKind] ||
+            [
+                { name: "general", description: "General chat", type: "text" },
+                { name: "announcements", description: "Official announcements", type: "announcement" },
+                { name: "general-voice", description: "General voice channel", type: "voice" },
+            ];
         await Channel.insertMany(
             defaultChannels.map((ch) => ({
                 communityId: community._id,

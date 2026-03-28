@@ -120,7 +120,11 @@ const Sidebar = ({ isOpen, onClose, onProfileClick, onVoiceChannelClick, onOpenC
     };
 
     const handleChannelClick = (channel) => {
-        if (channel?.isPremium && isFreeTier) { navigate('/upgrade'); onClose?.(); return; }
+        if (channel?.isPremium && isFreeTier && !canEditChannel) {
+            navigate('/upgrade');
+            onClose?.();
+            return;
+        }
         const channelId = channel?._id ?? null;
         setActiveChannel(channelId);
         onClose?.();

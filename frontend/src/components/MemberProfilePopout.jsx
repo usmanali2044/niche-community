@@ -15,7 +15,9 @@ const MemberProfilePopout = ({ isOpen, onClose, member, anchorClassName = '' }) 
 
     const displayName = member.displayName || 'Member';
     const username = member.username || 'user';
-    const statusText = member.bio || member.statusText || 'No bio yet';
+    const rawStatus = member.bio || member.statusText || '';
+    const cleanedStatus = rawStatus.trim().toLowerCase() === 'eat sleep code repeat' ? '' : rawStatus;
+    const statusText = cleanedStatus || 'No bio yet';
     const presence = member.presence || 'offline';
     const bannerColor = member.bannerColor || '#3f4f4f';
     const isPremium = ['premium', 'enterprise'].includes(member.tier || 'free');

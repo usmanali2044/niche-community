@@ -31,6 +31,13 @@ const presenceColor = (presence) => {
     return 'bg-discord-green';
 };
 
+const filterStatusText = (text) => {
+    const value = (text || '').trim();
+    if (!value) return '';
+    if (value.toLowerCase() === 'eat sleep code repeat') return '';
+    return value;
+};
+
 const FeedPage = () => {
     const [viewMode, setViewMode] = useState('server'); // 'server' | 'friends' | 'dm'
     const [showProfilePopout, setShowProfilePopout] = useState(false);
@@ -553,7 +560,9 @@ const FeedPage = () => {
                                     </div>
                                     <div>
                                         <p className="text-sm font-semibold text-discord-white">{m.displayName}</p>
-                                        <p className="text-[11px] text-discord-faint">{m.statusText}</p>
+                                        {filterStatusText(m.statusText) && (
+                                            <p className="text-[11px] text-discord-faint">{filterStatusText(m.statusText)}</p>
+                                        )}
                                     </div>
                                 </button>
                             ))}
@@ -1102,7 +1111,9 @@ const FeedPage = () => {
                                                 </div>
                                                 <div>
                                                     <p className="text-sm font-semibold text-discord-white">{friend.displayName}</p>
-                                                    <p className="text-[11px] text-discord-faint">{friend.statusText}</p>
+                                                    {filterStatusText(friend.statusText) && (
+                                                        <p className="text-[11px] text-discord-faint">{filterStatusText(friend.statusText)}</p>
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2">

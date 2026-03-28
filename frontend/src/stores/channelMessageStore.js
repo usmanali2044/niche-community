@@ -15,11 +15,16 @@ export const useChannelMessageStore = create((set) => ({
 
     fetchMessages: async (channelId) => {
         set({ isLoading: true, error: null, messages: [] });
-        const res = await apiFetch(`${API_URL}/${channelId}`, { credentials: 'include' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Failed to load messages');
-        set({ messages: data.messages || [], isLoading: false });
-        return data.messages || [];
+        try {
+            const res = await apiFetch(`${API_URL}/${channelId}`, { credentials: 'include' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'Failed to load messages');
+            set({ messages: data.messages || [], isLoading: false });
+            return data.messages || [];
+        } catch (error) {
+            set({ isLoading: false, error: error.message || 'Failed to load messages' });
+            throw error;
+        }
     },
 
     clearChannelState: () => set({

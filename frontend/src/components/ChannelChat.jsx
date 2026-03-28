@@ -23,6 +23,7 @@ const ChannelChat = ({ channel, socket, currentUser, members = [], showPins, onC
     const {
         messages,
         isLoading,
+        error,
         fetchMessages,
         clearChannelState,
         sendMessage,
@@ -68,6 +69,13 @@ const ChannelChat = ({ channel, socket, currentUser, members = [], showPins, onC
     const typingTimeoutRef = useRef(null);
     const inputRef = useRef(null);
     const endRef = useRef(null);
+
+    const handleCloseEdit = () => {
+        setShowEditModal(false);
+        setEditError('');
+        setIsSavingEdit(false);
+        setIsDeleting(false);
+    };
 
     const memberMap = useMemo(() => {
         const map = new Map();
@@ -117,7 +125,9 @@ const ChannelChat = ({ channel, socket, currentUser, members = [], showPins, onC
             setIsSwitching(true);
             clearChannelState?.();
             const started = Date.now();
-            await fetchMessages(channel._id);
+            try {
+                await fetchMessages(channel._id);
+            } catch { }
             const elapsed = Date.now() - started;
             const remaining = Math.max(0, MIN_LOAD_MS - elapsed);
             setTimeout(() => {
@@ -135,6 +145,13 @@ const ChannelChat = ({ channel, socket, currentUser, members = [], showPins, onC
         if (!channel?._id) return;
         setShowEditModal(true);
     }, [editSignal, canEditChannel, channel?._id]);
+
+    useEffect(() => {
+        setShowEditModal(false);
+        setEditError('');
+        setIsSavingEdit(false);
+        setIsDeleting(false);
+    }, [activeCommunityId, channel?._id]);
 
     useEffect(() => {
         if (!socket) return;
@@ -421,7 +438,7 @@ const ChannelChat = ({ channel, socket, currentUser, members = [], showPins, onC
         setIsSavingEdit(true);
         try {
             await updateChannelName(channel._id, name);
-            setShowEditModal(false);
+            handleCloseEdit();
         } catch (err) {
             setEditError(err.message || 'Failed to update channel');
         } finally {
@@ -437,7 +454,7 @@ const ChannelChat = ({ channel, socket, currentUser, members = [], showPins, onC
         setIsDeleting(true);
         try {
             await deleteChannel(channel._id);
-            setShowEditModal(false);
+            handleCloseEdit();
         } catch (err) {
             setEditError(err.message || 'Failed to delete channel');
         } finally {
@@ -451,6 +468,18 @@ const ChannelChat = ({ channel, socket, currentUser, members = [], showPins, onC
             <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-6">
                 {isLoading || isSwitching ? (
                     <div className="text-sm text-discord-faint">Loading messages...</div>
+                ) : error ? (
+                    <div className="max-w-2xl rounded-xl border border-discord-border/50 bg-discord-darkest/70 p-5">
+                        <p className="text-sm text-discord-light">{error}</p>
+                        {canEditChannel && (
+                            <button
+                                onClick={() => setShowEditModal(true)}
+                                className="mt-4 px-3 py-2 rounded-md bg-discord-darkest text-sm font-semibold text-discord-light hover:bg-discord-border-light/30 cursor-pointer"
+                            >
+                                Edit Channel
+                            </button>
+                        )}
+                    </div>
                 ) : messages.length === 0 ? (
                     <div className="max-w-2xl">
                         <div className="w-14 h-14 rounded-full bg-discord-darkest flex items-center justify-center text-3xl text-discord-faint mb-4">
@@ -650,6 +679,14 @@ const ChannelChat = ({ channel, socket, currentUser, members = [], showPins, onC
                         type="text"
                         value={text}
                         onChange={(e) => handleTextChange(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                if (e.nativeEvent?.isComposing) return;
+                                e.preventDefault();
+                                if (!canPost) return;
+                                handleSend();
+                            }
+                        }}
                         onBlur={() => {
                             if (!channel?._id) return;
                             socket?.emit('channel:typing', { channelId: channel._id, userId: currentUser?.id, isTyping: false });
@@ -786,7 +823,7 @@ const ChannelChat = ({ channel, socket, currentUser, members = [], showPins, onC
         />
         <ChannelEditModal
             isOpen={showEditModal}
-            onClose={() => { setShowEditModal(false); setEditError(''); }}
+            onClose={handleCloseEdit}
             channelName={channel?.name || ''}
             onSave={handleSaveChannelName}
             onDelete={handleDeleteChannel}
