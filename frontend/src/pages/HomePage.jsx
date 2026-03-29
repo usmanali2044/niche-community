@@ -442,30 +442,12 @@ const HomePage = () => {
             ],
         },
         {
-            heading: 'Resources',
-            links: [
-                { label: 'Documentation' },
-                { label: 'API Status' },
-                { label: 'Support' },
-                { label: 'Changelog' },
-            ],
-        },
-        {
             heading: 'Company',
             links: [
                 { label: 'About', href: '#about' },
                 { label: 'Careers', icon: Briefcase },
                 { label: 'Contact', href: '#contact' },
                 { label: 'Partners', icon: Users },
-            ],
-        },
-        {
-            heading: 'Legal',
-            links: [
-                { label: 'Privacy Policy' },
-                { label: 'Terms of Service' },
-                { label: 'Cookie Policy' },
-                { label: 'Security' },
             ],
         },
     ];
