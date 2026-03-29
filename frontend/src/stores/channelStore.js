@@ -100,5 +100,9 @@ export const useChannelStore = create((set, get) => ({
         set({ activeChannelId: channelId });
     },
 
+    clearChannels: () => {
+        set({ channels: [], activeChannelId: null, error: null, isLoading: false });
+    },
+
     clearError: () => set({ error: null }),
 }));

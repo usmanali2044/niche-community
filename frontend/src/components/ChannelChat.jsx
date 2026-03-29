@@ -140,6 +140,12 @@ const ChannelChat = ({ channel, socket, currentUser, members = [], showPins, onC
     }, [channel?._id, fetchMessages, socket, clearChannelState]);
 
     useEffect(() => {
+        if (channel?._id) return;
+        clearChannelState?.();
+        setIsSwitching(false);
+    }, [channel?._id, clearChannelState]);
+
+    useEffect(() => {
         if (!editSignal) return;
         if (!canEditChannel) return;
         if (!channel?._id) return;

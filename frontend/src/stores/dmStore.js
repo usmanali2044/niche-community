@@ -7,6 +7,7 @@ const API_URL = apiUrl('/api/dm');
 export const useDmStore = create((set) => ({
     threadId: null,
     messages: [],
+    threads: [],
     isLoading: false,
     error: null,
 
@@ -18,6 +19,79 @@ export const useDmStore = create((set) => ({
         set({ threadId: data.threadId, isLoading: false });
         return data.threadId;
     },
+
+    setThreadId: (threadId) => set({ threadId }),
+
+    fetchThreads: async () => {
+        set({ isLoading: true, error: null });
+        const res = await apiFetch(`${API_URL}/threads`, { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to load threads');
+        set({ threads: data.threads || [], isLoading: false });
+        return data.threads || [];
+    },
+
+    fetchThreadInfo: async (threadId) => {
+        set({ isLoading: true, error: null });
+        const res = await apiFetch(`${API_URL}/thread-info/${threadId}`, { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to load thread');
+        set((state) => {
+            const next = state.threads.filter((t) => t._id !== data.thread?._id);
+            return { threads: data.thread ? [data.thread, ...next] : next, isLoading: false };
+        });
+        return data.thread;
+    },
+
+    createGroupThread: async (participantIds) => {
+        const res = await apiFetch(`${API_URL}/group`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ participantIds }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to create group');
+        set((state) => {
+            const next = state.threads.filter((t) => t._id !== data.thread?._id);
+            return { threads: data.thread ? [data.thread, ...next] : next };
+        });
+        return data.thread;
+    },
+
+    addParticipants: async (threadId, participantIds) => {
+        const res = await apiFetch(`${API_URL}/thread/${threadId}/add`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ participantIds }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to add participants');
+        set((state) => {
+            const next = state.threads.filter((t) => t._id !== data.thread?._id);
+            return { threads: data.thread ? [data.thread, ...next] : next };
+        });
+        return data.thread;
+    },
+    leaveThread: async (threadId) => {
+        const res = await apiFetch(`${API_URL}/thread/${threadId}/leave`, {
+            method: 'POST',
+            credentials: 'include',
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to leave group');
+        return data;
+    },
+    removeThread: (threadId) => set((state) => ({
+        threads: state.threads.filter((t) => t._id !== threadId),
+    })),
+
+    upsertThread: (thread) => set((state) => {
+        if (!thread?._id) return state;
+        const next = state.threads.filter((t) => t._id !== thread._id);
+        return { threads: [thread, ...next] };
+    }),
 
     fetchMessages: async (threadId) => {
         set({ isLoading: true, error: null });

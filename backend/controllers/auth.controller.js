@@ -375,11 +375,15 @@ export const verifyEmail = async (req, res) => {
 
         await sendWelcomeEmail(user.email, user.name);
 
+        const populatedUser = await User.findById(user._id)
+            .populate('memberships.communityId', 'name slug icon')
+            .lean();
+
         res.status(200).json({
             success: true,
             message: "Email verified successfully",
             user: {
-                ...(await withTier(user._doc)),
+                ...(await withTier(populatedUser)),
                 password: undefined,
             },
         });

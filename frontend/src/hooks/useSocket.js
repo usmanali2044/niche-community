@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuthStore } from '../stores/authStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -17,6 +17,7 @@ import { SOCKET_URL } from '../config/urls';
  */
 const useSocket = (userId, communityId) => {
     const [socket, setSocket] = useState(null);
+    const prevCommunityRef = useRef(null);
 
     useEffect(() => {
         // Connect to the Socket.io server
@@ -101,7 +102,19 @@ const useSocket = (userId, communityId) => {
             newSocket.disconnect();
             setSocket(null);
         };
-    }, [userId, communityId]);
+    }, [userId]);
+
+    useEffect(() => {
+        if (!socket) return;
+        const prev = prevCommunityRef.current;
+        if (prev && prev !== communityId) {
+            socket.emit('leave_community_room', prev);
+        }
+        if (communityId) {
+            socket.emit('join_community_room', communityId);
+        }
+        prevCommunityRef.current = communityId || null;
+    }, [socket, communityId]);
 
     return socket;
 };

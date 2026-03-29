@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bell, MessageCircle, AtSign, X, Check, Megaphone, ShieldAlert, Calendar } from 'lucide-react';
+import { Bell, MessageCircle, AtSign, X, Check, Megaphone, ShieldAlert, Calendar, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
@@ -46,6 +46,7 @@ const NotificationBell = () => {
             case 'moderator':
             case 'warning': return <ShieldAlert className="w-4 h-4 text-red-400" strokeWidth={2} />;
             case 'event': return <Calendar className="w-4 h-4 text-emerald-400" strokeWidth={2} />;
+            case 'friend': return <UserPlus className="w-4 h-4 text-green-400" strokeWidth={2} />;
             default: return <Bell className="w-4 h-4 text-blurple" strokeWidth={2} />;
         }
     };
@@ -99,6 +100,24 @@ const NotificationBell = () => {
                 return (<><span className="text-discord-light">New server announcement from </span><span className="font-bold text-discord-white">{notif.meta?.senderName || 'Admin'}</span></>);
             case 'warning':
                 return <span className="text-discord-red font-semibold">You received a warning from a moderator</span>;
+            case 'friend':
+                if (notif.meta?.action === 'request') {
+                    return (
+                        <>
+                            <span className="font-bold text-discord-white">{notif.meta?.requesterName || 'Someone'}</span>
+                            <span className="text-discord-light"> sent you a friend request</span>
+                        </>
+                    );
+                }
+                if (notif.meta?.action === 'accepted') {
+                    return (
+                        <>
+                            <span className="font-bold text-discord-white">{notif.meta?.requesterName || 'Someone'}</span>
+                            <span className="text-discord-light"> accepted your friend request</span>
+                        </>
+                    );
+                }
+                return <span className="text-discord-light">New friend update</span>;
             case 'moderator': {
                 const action = notif.meta?.action;
                 if (action === 'report_message') {
@@ -123,6 +142,14 @@ const NotificationBell = () => {
 
     const handleNotificationClick = async (notif) => {
         const meta = notif?.meta || {};
+        if (notif.type === 'friend' && meta.action === 'request') {
+            navigate('/feed?tab=pending');
+            if (!notif.readAt) {
+                markAsRead(notif._id).catch(() => { });
+            }
+            setOpen(false);
+            return;
+        }
         if (meta.action === 'server_invite') {
             navigate('/feed?tab=invites');
             if (!notif.readAt) {

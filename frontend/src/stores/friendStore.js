@@ -116,5 +116,9 @@ export const useFriendStore = create((set) => ({
         return { friends, onlineCount };
     }),
 
+    removeOutgoing: (userId) => set((state) => ({
+        outgoing: state.outgoing.filter((r) => r._id !== userId),
+    })),
+
     clearMessages: () => set({ error: null, success: null }),
 }));

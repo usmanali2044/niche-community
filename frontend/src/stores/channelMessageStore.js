@@ -32,6 +32,9 @@ export const useChannelMessageStore = create((set) => ({
         commentsByMessage: {},
         commentsLoading: {},
         pinnedMessages: [],
+        error: null,
+        isLoading: false,
+        scrollToMessageId: null,
     }),
 
     sendMessage: async (channelId, payload) => {

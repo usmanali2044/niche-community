@@ -22,7 +22,7 @@ const SETTINGS_SECTIONS = [
     { label: 'My Account', key: 'account' },
     { label: 'Language', key: 'language' },
     { label: 'Data & Privacy', key: 'privacy' },
-    { label: 'Family Center', key: 'family' },
+    { label: 'Community Essentials', key: 'community' },
 ];
 
 const BILLING_SECTIONS = [
@@ -333,7 +333,7 @@ const ProfileSettingsModal = ({ isOpen, onClose, profile, user, onSave }) => {
                                                 </div>
                                                 <div className="flex-1">
                                                     <p className="text-sm text-discord-light font-semibold">
-                                                        {avatarUploading ? 'Uploading…' : 'Click to upload or drag and drop'}
+                                                        {avatarUploading ? 'Uploading...' : 'Click to upload or drag and drop'}
                                                     </p>
                                                     <p className="text-[11px] text-discord-faint">
                                                         JPG, PNG, GIF, or WEBP (max 10MB)
@@ -524,29 +524,39 @@ const ProfileSettingsModal = ({ isOpen, onClose, profile, user, onSave }) => {
                             </div>
                         )}
 
-                        {activeSection === 'family' && (
+                        {activeSection === 'community' && (
                             <div className="px-5 sm:px-8 py-8">
-                                <div className="max-w-4xl mx-auto space-y-6">
-                                    <div className="rounded-2xl border border-discord-border/60 bg-discord-darkest/80 p-6 flex items-center justify-between gap-6">
-                                        <div>
-                                            <h2 className="text-lg font-semibold text-white">Stay informed about how your teen is using CircleCore.</h2>
-                                            <p className="text-sm text-discord-faint mt-2">
-                                                We built Family Center to provide more context so you can work together on healthy online habits.
+                                <div className="max-w-5xl mx-auto space-y-6">
+                                    <div className="rounded-3xl border border-discord-border/60 bg-gradient-to-br from-[#1f2230] via-[#232734] to-[#1a1d27] p-6 md:p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 shadow-[0_18px_45px_rgba(10,12,20,0.45)]">
+                                        <div className="space-y-3">
+                                            <p className="text-[11px] uppercase tracking-[0.35em] text-blurple/80 font-semibold">Community Essentials</p>
+                                            <h2 className="text-2xl md:text-3xl font-semibold text-white">
+                                                Communities thrive when trust, invite-only access, and real-time presence work together.
+                                            </h2>
+                                            <p className="text-sm text-discord-faint max-w-2xl">
+                                                CircleCore is built for shared purpose - invite-only servers, member-first moderation, and live presence that makes your space feel active and safe.
                                                 <a href="/help" className="text-blurple ml-1 hover:underline">Learn more</a>
                                             </p>
+                                            <div className="flex flex-wrap gap-2 pt-2">
+                                                {['Invite-Only', 'Member-First', 'Real-Time', 'Trust & Safety'].map((chip) => (
+                                                    <span key={chip} className="px-3 py-1 rounded-full text-[11px] font-semibold bg-discord-darkest/80 border border-discord-border/60 text-discord-light">
+                                                        {chip}
+                                                    </span>
+                                                ))}
+                                            </div>
                                         </div>
-                                        <div className="w-32 h-24 rounded-xl bg-gradient-to-br from-blurple/30 via-emerald-400/20 to-yellow-400/20 flex items-center justify-center text-discord-light text-sm">
-                                            Family
+                                        <div className="w-full lg:w-[260px] h-[160px] rounded-2xl bg-gradient-to-br from-blurple/40 via-indigo-500/20 to-emerald-400/20 border border-white/5 flex items-center justify-center text-sm font-semibold text-discord-light">
+                                            Community First
                                         </div>
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         {[
-                                            { title: 'Messages stay private', text: 'You can see who your teen is talking to, while still respecting their privacy.' },
-                                            { title: 'Transparent sharing', text: 'You and your teen see the exact same information, so you are on the same page.' },
-                                            { title: 'Easily connect', text: 'Setup is as simple as scanning a QR code your teen shows you.' },
+                                            { title: 'Invite-Only by Default', text: 'Keep spaces intentional. New members arrive through trusted invites and approvals.' },
+                                            { title: 'Shared Culture', text: 'Channels and roles reinforce your group\'s vibe so newcomers learn fast.' },
+                                            { title: 'Live Presence', text: 'See who\'s active in real time - text, voice, and community moments.' },
                                         ].map((card) => (
-                                            <div key={card.title} className="rounded-2xl border border-discord-border/60 bg-discord-darkest/80 p-4">
+                                            <div key={card.title} className="rounded-2xl border border-discord-border/60 bg-discord-darkest/80 p-5 hover:border-blurple/60 transition-colors">
                                                 <h3 className="text-sm font-semibold text-white">{card.title}</h3>
                                                 <p className="text-xs text-discord-faint mt-2">{card.text}</p>
                                             </div>
@@ -555,20 +565,17 @@ const ProfileSettingsModal = ({ isOpen, onClose, profile, user, onSave }) => {
 
                                     <div className="rounded-2xl border border-discord-border/60 bg-discord-darkest/80 p-6 space-y-4">
                                         <div>
-                                            <h3 className="text-sm font-semibold text-white">What are connected parents and guardians able to see?</h3>
+                                            <h3 className="text-sm font-semibold text-white">What makes a CircleCore community feel different?</h3>
                                             <p className="text-xs text-discord-faint mt-2">
-                                                Our goal is to help you stay informed about your teen’s activity so you can have meaningful conversations and support them.
+                                                We focus on healthy engagement and clarity - so members know where to go, who to trust, and how to contribute.
                                             </p>
                                         </div>
-                                        <div className="space-y-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                             {[
-                                                { title: 'New friends', text: 'New friends that your teen added or accepted.' },
-                                                { title: 'Servers joined or participated in', text: 'Servers your teen recently joined, created, or sent a message in.' },
-                                                { title: 'Users messaged or called', text: 'This includes direct messages and group chats.' },
-                                                { title: 'Total time spent in voice or video', text: 'Minutes in calls across direct messages, group chats, and servers.' },
-                                                { title: 'Total purchases', text: 'All purchases your teen made, including shop and subscriptions.' },
-                                                { title: 'Reports shared by your teen', text: 'If they share a report they filed, you’ll be notified.' },
-                                                { title: 'Teen account settings', text: 'You can manage settings your teen can’t edit on their own.' },
+                                                { title: 'Purpose-built channels', text: 'Spaces for hangouts, collaboration, and focus - not just endless chat.' },
+                                                { title: 'Invite-only access', text: 'Share a code, approve requests, and keep your community curated.' },
+                                                { title: 'Roles with meaning', text: 'Reward participation and create structure that scales with your group.' },
+                                                { title: 'Real-time visibility', text: 'See who\'s active across text and voice without clicking around.' },
                                             ].map((row) => (
                                                 <div key={row.title} className="rounded-xl border border-discord-border/60 bg-discord-darkest/70 p-4">
                                                     <p className="text-sm font-semibold text-white">{row.title}</p>

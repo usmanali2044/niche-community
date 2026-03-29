@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Hash, Search, Users, Pin, HelpCircle, User, MessageCircle, Phone, MoreVertical, Mic, Headphones, Settings, Menu, X, Server, Compass } from 'lucide-react';
+import { Hash, Search, Users, Pin, HelpCircle, User, MessageCircle, Phone, MoreVertical, Settings, Menu, X, Server, Compass } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useFeedStore } from '../stores/feedStore';
 import { useProfileStore } from '../stores/profileStore';
@@ -64,7 +64,7 @@ const FeedPage = () => {
     const { profile, updateProfile } = useProfileStore();
     const { activeCommunityId, setActiveCommunity } = useWorkspaceStore();
     const { friends: rosterFriends, fetchRoster, updatePresence: updateRosterPresence } = useRosterStore();
-    const { channels, activeChannelId, fetchChannels, setActiveChannel } = useChannelStore();
+    const { channels, activeChannelId, fetchChannels, setActiveChannel, clearChannels } = useChannelStore();
     const {
         friends,
         onlineCount,
@@ -81,6 +81,7 @@ const FeedPage = () => {
         removeFriend,
         clearMessages,
         updatePresence: updateFriendPresence,
+        removeOutgoing,
     } = useFriendStore();
     const {
         invites,
@@ -91,7 +92,23 @@ const FeedPage = () => {
         declineInvite,
         clearError: clearInviteError,
     } = useServerInviteStore();
-    const { threadId, messages, openThread, fetchMessages, sendMessage, pushMessage } = useDmStore();
+    const {
+        threadId,
+        messages,
+        threads: dmThreads,
+        openThread,
+        setThreadId,
+        fetchThreads,
+        fetchThreadInfo,
+        createGroupThread,
+        addParticipants: addParticipantsToThread,
+        leaveThread,
+        removeThread,
+        fetchMessages,
+        sendMessage,
+        pushMessage,
+        upsertThread,
+    } = useDmStore();
     const { fetchEvents, handleNewEvent, handleRsvpUpdate, handleDeleteEvent, handleUpdateEvent, handleStartEvent, handleEndEvent } = useEventStore();
     const [activeDm, setActiveDm] = useState(null);
     const [dmText, setDmText] = useState('');
@@ -99,15 +116,91 @@ const FeedPage = () => {
     const [dmSending, setDmSending] = useState(false);
     const [typingUser, setTypingUser] = useState(null);
     const [showStreamViewer, setShowStreamViewer] = useState(true);
-    const [showStreamFullscreen, setShowStreamFullscreen] = useState(false);
+    const [fullscreenStream, setFullscreenStream] = useState(null);
+    const [showGroupAdd, setShowGroupAdd] = useState(false);
+    const [groupSearch, setGroupSearch] = useState('');
+    const [groupSelection, setGroupSelection] = useState([]);
+    const [groupError, setGroupError] = useState('');
     const [roles, setRoles] = useState([]);
     const streamVideoRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const prevCommunityIdRef = useRef(activeCommunityId);
+    const [incomingCall, setIncomingCall] = useState(null);
+    const [outgoingCall, setOutgoingCall] = useState(null);
+    const [activeDmCall, setActiveDmCall] = useState(null);
+    const [ongoingDmCalls, setOngoingDmCalls] = useState(() => new Set());
+    const [voicePresence, setVoicePresence] = useState({});
+    const ringtoneRef = useRef({ ctx: null, timer: null });
 
     const displayName = profile?.displayName || profile?.name || user?.name || 'Usman';
     const username = user?.username || 'usman1943';
     const statusText = profile?.bio || 'No bio yet';
+
+    const buildDmEntry = useCallback((thread) => {
+        if (!thread) return null;
+        const participants = thread.participants || [];
+        const others = participants.filter((p) => p._id !== user?._id);
+        const isGroup = !!thread.isGroup || others.length > 1;
+        const displayName = isGroup
+            ? `${others.slice(0, 2).map((p) => p.displayName).join(', ')}${others.length > 2 ? ` +${others.length - 2}` : ''}`
+            : (others[0]?.displayName || thread.displayName || 'Direct Message');
+        const subtitle = isGroup ? `${participants.length} Members` : (others[0]?.username || '');
+        return {
+            ...thread,
+            participants,
+            others,
+            isGroup,
+            displayName,
+            subtitle,
+            avatar: !isGroup ? (others[0]?.avatar || '') : '',
+            presence: !isGroup ? (others[0]?.presence || 'offline') : 'online',
+        };
+    }, [user?._id]);
+
+    const playRingtone = useCallback(() => {
+        if (ringtoneRef.current.timer) return;
+        const ringOnce = () => {
+            try {
+                if (!ringtoneRef.current.ctx) {
+                    ringtoneRef.current.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                const ctx = ringtoneRef.current.ctx;
+                const gain = ctx.createGain();
+                gain.gain.value = 0.0;
+                gain.connect(ctx.destination);
+
+                const toneA = ctx.createOscillator();
+                toneA.type = 'sine';
+                toneA.frequency.value = 523.25;
+                toneA.connect(gain);
+
+                const toneB = ctx.createOscillator();
+                toneB.type = 'sine';
+                toneB.frequency.value = 659.25;
+                toneB.connect(gain);
+
+                const now = ctx.currentTime;
+                gain.gain.linearRampToValueAtTime(0.06, now + 0.02);
+                gain.gain.linearRampToValueAtTime(0.0, now + 0.42);
+
+                toneA.start(now);
+                toneB.start(now);
+                toneA.stop(now + 0.45);
+                toneB.stop(now + 0.45);
+            } catch {
+                // ignore audio errors
+            }
+        };
+        ringOnce();
+        ringtoneRef.current.timer = setInterval(ringOnce, 1400);
+    }, []);
+
+    const stopRingtone = useCallback(() => {
+        if (ringtoneRef.current.timer) {
+            clearInterval(ringtoneRef.current.timer);
+            ringtoneRef.current.timer = null;
+        }
+    }, []);
 
     useEffect(() => {
         if (!user?.memberships || user.memberships.length === 0) {
@@ -117,9 +210,9 @@ const FeedPage = () => {
 
     useEffect(() => {
         const tab = searchParams.get('tab');
-        if (tab === 'invites') {
+        if (tab && ['online', 'all', 'pending', 'invites', 'add'].includes(tab)) {
             setViewMode('friends');
-            setActiveTab('invites');
+            setActiveTab(tab);
         }
     }, [searchParams]);
 
@@ -127,6 +220,11 @@ const FeedPage = () => {
         if (!activeCommunityId) return;
         fetchRoster();
     }, [activeCommunityId, fetchRoster]);
+
+    useEffect(() => {
+        if (!user?._id) return;
+        fetchThreads();
+    }, [user?._id, fetchThreads]);
 
     useEffect(() => {
         if (!pendingEditChannelId || pendingEditChannelId !== activeChannelId) return;
@@ -162,10 +260,14 @@ const FeedPage = () => {
         activeVoiceChannel,
         participants: voiceParticipants,
         remoteMedia,
-        remoteVideos,
+        remoteScreenStreams,
+        remoteCameraStreams,
+        localScreenStream,
+        localCameraStream,
         isMuted,
         isDeafened,
         isSharing,
+        isCameraOn,
         noiseReduction,
         connectedPeerIds,
         elapsed,
@@ -174,15 +276,52 @@ const FeedPage = () => {
         toggleMute,
         toggleDeafen,
         toggleNoiseReduction,
+        startCamera,
+        stopCamera,
         startScreenShare,
         stopScreenShare,
     } = useVoiceCall(socket, user, profile);
 
     useEffect(() => {
-        if (remoteVideos.length > 0) {
+        if (remoteScreenStreams.length > 0) {
             setShowStreamViewer(true);
         }
-    }, [remoteVideos.length]);
+    }, [remoteScreenStreams.length]);
+
+    const remoteScreenStream = remoteScreenStreams[0]?.stream || null;
+    const remoteCameraStream = remoteCameraStreams[0]?.stream || null;
+    const screenShareTiles = useMemo(() => {
+        const tiles = [];
+        if (localScreenStream) {
+            tiles.push({
+                id: 'local-share',
+                stream: localScreenStream,
+                ownerName: displayName || 'You',
+                isLocal: true,
+            });
+        }
+        remoteScreenStreams.forEach((item) => {
+            const name = voiceParticipants.find((p) => p.socketId === item.socketId)?.displayName || 'Someone';
+            tiles.push({
+                id: `remote-share-${item.socketId}`,
+                stream: item.stream,
+                ownerName: name,
+                isLocal: false,
+            });
+        });
+        return tiles;
+    }, [localScreenStream, remoteScreenStreams, voiceParticipants, displayName]);
+    const screenShareStream = screenShareTiles[0]?.stream || null;
+    const isRemoteScreenShare = screenShareTiles.some((t) => !t.isLocal);
+    const showStreamFullscreen = !!fullscreenStream;
+
+    useEffect(() => {
+        if (!fullscreenStream) return;
+        const activeStreams = new Set([screenShareStream, remoteCameraStream, localCameraStream].filter(Boolean));
+        if (activeStreams.size === 0 || !activeStreams.has(fullscreenStream)) {
+            setFullscreenStream(null);
+        }
+    }, [fullscreenStream, screenShareStream, remoteCameraStream, localCameraStream]);
 
     useEffect(() => {
         if (!socket) return;
@@ -217,6 +356,132 @@ const FeedPage = () => {
                 setTypingUser(isTyping ? userId : null);
             }
         };
+        const handleNotification = (notification) => {
+            const action = notification?.meta?.action;
+            if (action === 'server_invite') {
+                fetchInvites().catch(() => { });
+            }
+            if (notification?.type === 'friend' || action === 'request') {
+                fetchRequests().catch(() => { });
+                fetchFriends().catch(() => { });
+            }
+        };
+        const handleThreadUpdated = (thread) => {
+            if (!thread?._id) return;
+            upsertThread(thread);
+        };
+        const handleThreadRemoved = ({ threadId: removedId }) => {
+            if (!removedId) return;
+            removeThread(removedId);
+            if (activeDmCall?.threadId === removedId) {
+                setActiveDmCall(null);
+                if (isSharing) stopScreenShare();
+                leaveVoice();
+            }
+            if (activeDm?._id === removedId) {
+                setActiveDm(null);
+                setThreadId(null);
+                setViewMode('dm');
+            }
+        };
+        const handleRequestDeclined = ({ byUserId }) => {
+            if (byUserId) {
+                removeOutgoing(byUserId);
+            }
+        };
+        const handleIncomingCall = (payload) => {
+            if (!payload?.threadId || !payload?.fromUser) return;
+            if (activeDmCall || outgoingCall) {
+                socket.emit('dm:call:decline', { toUserId: payload.fromUser.userId, threadId: payload.threadId });
+                return;
+            }
+            setOngoingDmCalls((prev) => {
+                const next = new Set(prev);
+                next.add(payload.threadId);
+                return next;
+            });
+            setIncomingCall(payload);
+            playRingtone();
+        };
+        const handleCallAccepted = ({ threadId: tId }) => {
+            if (!outgoingCall || outgoingCall.threadId !== tId) return;
+            stopRingtone();
+            setOutgoingCall(null);
+            setActiveDmCall({ threadId: tId, peer: outgoingCall.toUser, isGroup: outgoingCall.toUser?.isGroup });
+            setOngoingDmCalls((prev) => {
+                const next = new Set(prev);
+                next.add(tId);
+                return next;
+            });
+            if (outgoingCall.threadMeta?.participants) {
+                const threadEntry = buildDmEntry({
+                    _id: tId,
+                    participants: outgoingCall.threadMeta.participants,
+                    displayName: outgoingCall.threadMeta.displayName,
+                    isGroup: true,
+                });
+                if (threadEntry) {
+                    setActiveDm(threadEntry);
+                    setThreadId(tId);
+                }
+            } else {
+                setActiveDm(outgoingCall.toUser);
+            }
+            setViewMode('dm');
+            if (activeVoiceChannel?._id) {
+                leaveVoice();
+            }
+            joinVoice({ _id: `dm-${tId}`, name: 'Direct Call' });
+        };
+        const handleCallDeclined = ({ threadId: tId }) => {
+            if (!outgoingCall || outgoingCall.threadId !== tId) return;
+            if (outgoingCall.toUsers?.length) return;
+            stopRingtone();
+            setOutgoingCall(null);
+            setOngoingDmCalls((prev) => {
+                const next = new Set(prev);
+                next.delete(tId);
+                return next;
+            });
+        };
+        const handleCallCancelled = ({ threadId: tId }) => {
+            if (!incomingCall || incomingCall.threadId !== tId) return;
+            stopRingtone();
+            setIncomingCall(null);
+            setOngoingDmCalls((prev) => {
+                const next = new Set(prev);
+                next.delete(tId);
+                return next;
+            });
+        };
+        const handleCallEnded = ({ threadId: tId }) => {
+            if (activeDmCall?.threadId !== tId) return;
+            setActiveDmCall(null);
+            leaveVoice();
+            setOngoingDmCalls((prev) => {
+                const next = new Set(prev);
+                next.delete(tId);
+                return next;
+            });
+        };
+        const handleVoicePresence = ({ channelId, members }) => {
+            if (!channelId) return;
+            const channelKey = channelId?.toString?.() || String(channelId);
+            if (channelKey.startsWith('dm-')) return;
+            if (!Array.isArray(members) || members.length === 0) {
+                setVoicePresence((prev) => {
+                    if (!prev[channelKey]) return prev;
+                    const next = { ...prev };
+                    delete next[channelKey];
+                    return next;
+                });
+                return;
+            }
+            setVoicePresence((prev) => ({
+                ...prev,
+                [channelKey]: members,
+            }));
+        };
         const handleNewEventSocket = (event) => handleNewEvent(event);
         const handleRsvpSocket = (payload) => handleRsvpUpdate(payload);
         const handleDeleteSocket = ({ eventId }) => handleDeleteEvent(eventId);
@@ -229,6 +494,16 @@ const FeedPage = () => {
         socket.on('friends:requests:update', handleFriends);
         socket.on('dm:message', handleDmMessage);
         socket.on('dm:typing', handleTyping);
+        socket.on('dm:thread:updated', handleThreadUpdated);
+        socket.on('dm:thread:removed', handleThreadRemoved);
+        socket.on('new_notification', handleNotification);
+        socket.on('friends:request:declined', handleRequestDeclined);
+        socket.on('dm:call:incoming', handleIncomingCall);
+        socket.on('dm:call:accepted', handleCallAccepted);
+        socket.on('dm:call:declined', handleCallDeclined);
+        socket.on('dm:call:cancelled', handleCallCancelled);
+        socket.on('dm:call:ended', handleCallEnded);
+        socket.on('voice:members', handleVoicePresence);
         socket.on('new_event', handleNewEventSocket);
         socket.on('rsvp_update', handleRsvpSocket);
         socket.on('event_deleted', handleDeleteSocket);
@@ -240,21 +515,68 @@ const FeedPage = () => {
             socket.off('profile:updated', handlePresence);
             socket.off('friends:updated', handleFriends);
             socket.off('friends:requests:update', handleFriends);
-            socket.off('dm:message', handleDmMessage);
-            socket.off('dm:typing', handleTyping);
-            socket.off('new_event', handleNewEventSocket);
-            socket.off('rsvp_update', handleRsvpSocket);
-            socket.off('event_deleted', handleDeleteSocket);
-            socket.off('event_updated', handleUpdateSocket);
-            socket.off('event_started', handleStartSocket);
+        socket.off('dm:message', handleDmMessage);
+        socket.off('dm:typing', handleTyping);
+        socket.off('dm:thread:updated', handleThreadUpdated);
+        socket.off('dm:thread:removed', handleThreadRemoved);
+        socket.off('new_notification', handleNotification);
+        socket.off('friends:request:declined', handleRequestDeclined);
+        socket.off('dm:call:incoming', handleIncomingCall);
+        socket.off('dm:call:accepted', handleCallAccepted);
+        socket.off('dm:call:declined', handleCallDeclined);
+        socket.off('dm:call:cancelled', handleCallCancelled);
+        socket.off('dm:call:ended', handleCallEnded);
+        socket.off('voice:members', handleVoicePresence);
+        socket.off('new_event', handleNewEventSocket);
+        socket.off('rsvp_update', handleRsvpSocket);
+        socket.off('event_deleted', handleDeleteSocket);
+        socket.off('event_updated', handleUpdateSocket);
+        socket.off('event_started', handleStartSocket);
             socket.off('event_ended', handleEndSocket);
         };
-    }, [socket, user?._id, updateProfile, fetchFriends, fetchRequests, threadId, handleNewEvent, handleRsvpUpdate, handleDeleteEvent, handleUpdateEvent, handleStartEvent, handleEndEvent, updateFriendPresence, updateRosterPresence]);
+    }, [
+        socket,
+        user?._id,
+        updateProfile,
+        fetchFriends,
+        fetchRequests,
+        threadId,
+        handleNewEvent,
+        handleRsvpUpdate,
+        handleDeleteEvent,
+        handleUpdateEvent,
+        handleStartEvent,
+        handleEndEvent,
+        updateFriendPresence,
+        updateRosterPresence,
+        upsertThread,
+        activeDmCall,
+        outgoingCall,
+        incomingCall,
+        joinVoice,
+        leaveVoice,
+        stopScreenShare,
+        isSharing,
+        activeVoiceChannel?._id,
+        playRingtone,
+        stopRingtone,
+        buildDmEntry,
+        setThreadId,
+        fetchInvites,
+        removeThread,
+        activeDm,
+    ]);
 
     useEffect(() => {
         if (!activeCommunityId) return;
         fetchChannels();
     }, [activeCommunityId, fetchChannels]);
+
+    useEffect(() => {
+        if (!activeCommunityId) return;
+        clearChannels();
+        setActiveChannel(null);
+    }, [activeCommunityId, clearChannels, setActiveChannel]);
 
     useEffect(() => {
         fetchFriends();
@@ -284,17 +606,356 @@ const FeedPage = () => {
         prevCommunityIdRef.current = activeCommunityId;
     }, [activeCommunityId]);
 
+    useEffect(() => {
+        setVoicePresence({});
+    }, [activeCommunityId]);
+
     const openDmForFriend = async (friend) => {
         if (!friend?._id) return;
         setActiveFriendMenuId(null);
-        setActiveDm(friend);
         setViewMode('dm');
         try {
             const tid = await openThread(friend._id);
+            setThreadId(tid);
             socket?.emit('join_dm', tid);
             await fetchMessages(tid);
+            const threadInfo = await fetchThreadInfo(tid);
+            const entry = buildDmEntry(threadInfo);
+            if (entry) setActiveDm(entry);
         } catch { }
     };
+
+    const sendGroupCallInvite = useCallback((targetIds, threadEntry) => {
+        if (!socket || !Array.isArray(targetIds) || targetIds.length === 0) return;
+        const meta = {
+            threadId: threadEntry._id,
+            fromUser: {
+                userId: user?._id,
+                displayName,
+                avatar: profile?.avatar || '',
+            },
+            threadMeta: {
+                isGroup: true,
+                participants: threadEntry.participants || [],
+                displayName: threadEntry.displayName,
+            },
+        };
+        targetIds.forEach((id) => {
+            socket.emit('dm:call:start', { toUserId: id, ...meta });
+        });
+    }, [socket, user?._id, displayName, profile?.avatar]);
+
+    const startCallForFriend = useCallback(async (friend) => {
+        if (!socket || !friend?._id) return;
+        if (incomingCall || outgoingCall || activeDmCall) return;
+        try {
+            const tid = await openThread(friend._id);
+            setThreadId(tid);
+            socket.emit('join_dm', tid);
+            await fetchMessages(tid);
+            const threadInfo = await fetchThreadInfo(tid);
+            const entry = buildDmEntry(threadInfo);
+            if (entry) setActiveDm(entry);
+            setViewMode('dm');
+            const toUser = {
+                _id: friend._id,
+                displayName: friend.displayName || 'Friend',
+                avatar: friend.avatar || '',
+            };
+            setOutgoingCall({ threadId: tid, toUser });
+            socket.emit('dm:call:start', {
+                toUserId: friend._id,
+                threadId: tid,
+                fromUser: {
+                    userId: user?._id,
+                    displayName,
+                    avatar: profile?.avatar || '',
+                },
+                threadMeta: entry ? {
+                    isGroup: entry.isGroup,
+                    participants: entry.participants || [],
+                    displayName: entry.displayName,
+                } : undefined,
+            });
+        } catch { }
+    }, [socket, incomingCall, outgoingCall, activeDmCall, openThread, fetchMessages, fetchThreadInfo, buildDmEntry, user?._id, displayName, profile?.avatar, setThreadId]);
+
+    const startDmCall = useCallback(() => {
+        if (!socket || !activeDm || !threadId) return;
+        if (incomingCall || outgoingCall || activeDmCall) return;
+        if (activeDm.isGroup && ongoingDmCalls.has(threadId)) {
+            setActiveDmCall({ threadId, peer: { displayName: activeDm.displayName, isGroup: true }, isGroup: true });
+            setViewMode('dm');
+            if (activeVoiceChannel?._id) {
+                leaveVoice();
+            }
+            joinVoice({ _id: `dm-${threadId}`, name: 'Group Call' });
+            return;
+        }
+        const callMeta = {
+            threadId,
+            fromUser: {
+                userId: user?._id,
+                displayName,
+                avatar: profile?.avatar || '',
+            },
+            threadMeta: {
+                isGroup: activeDm.isGroup,
+                participants: activeDm.participants || [],
+                displayName: activeDm.displayName,
+            },
+        };
+
+        if (activeDm.isGroup) {
+            const recipients = (activeDm.participants || []).filter((p) => p._id !== user?._id);
+            if (recipients.length === 0) return;
+            setOutgoingCall({
+                threadId,
+                toUser: { displayName: activeDm.displayName, isGroup: true },
+                toUsers: recipients.map((p) => p._id),
+                threadMeta: callMeta.threadMeta,
+            });
+            sendGroupCallInvite(recipients.map((p) => p._id), {
+                _id: threadId,
+                participants: activeDm.participants || [],
+                displayName: activeDm.displayName,
+            });
+            setOngoingDmCalls((prev) => {
+                const next = new Set(prev);
+                next.add(threadId);
+                return next;
+            });
+            return;
+        }
+
+        const peer = activeDm.others?.[0] || (activeDm.participants || []).find((p) => p._id !== user?._id);
+        const toUser = {
+            _id: peer?._id,
+            displayName: peer?.displayName || activeDm.displayName,
+            avatar: peer?.avatar || activeDm.avatar || '',
+        };
+        if (!toUser._id) return;
+        setOutgoingCall({ threadId, toUser });
+        socket.emit('dm:call:start', {
+            toUserId: toUser._id,
+            ...callMeta,
+        });
+    }, [socket, activeDm, threadId, incomingCall, outgoingCall, activeDmCall, user?._id, displayName, profile?.avatar, sendGroupCallInvite, ongoingDmCalls, activeVoiceChannel?._id, leaveVoice, joinVoice]);
+
+    const openGroupAddModal = useCallback(() => {
+        setGroupSearch('');
+        setGroupSelection([]);
+        setGroupError('');
+        setShowGroupAdd(true);
+    }, []);
+
+
+    const groupCandidateList = useMemo(() => {
+        const activeIds = new Set((activeDm?.participants || []).map((p) => p._id));
+        const candidates = friends
+            .filter((f) => f._id !== user?._id && !activeIds.has(f._id))
+            .filter((f) => {
+                if (!groupSearch.trim()) return true;
+                const query = groupSearch.trim().toLowerCase();
+                return (f.displayName || '').toLowerCase().includes(query)
+                    || (f.username || '').toLowerCase().includes(query);
+            });
+        return candidates;
+    }, [friends, activeDm?.participants, groupSearch, user?._id]);
+
+    const maxGroupSize = 5;
+    const currentGroupSize = activeDm?.participants?.length || 0;
+    const remainingSlots = Math.max(0, maxGroupSize - currentGroupSize);
+
+    const toggleGroupSelection = (id) => {
+        setGroupError('');
+        setGroupSelection((prev) => {
+            if (prev.includes(id)) return prev.filter((x) => x !== id);
+            if (remainingSlots <= prev.length) {
+                setGroupError(`Group limit is ${maxGroupSize} members.`);
+                return prev;
+            }
+            return [...prev, id];
+        });
+    };
+
+    const handleAddGroupMembers = async () => {
+        if (!activeDm?._id || groupSelection.length === 0) return;
+        if (groupSelection.length > remainingSlots) {
+            setGroupError(`Group limit is ${maxGroupSize} members.`);
+            return;
+        }
+        try {
+            let updated = null;
+            if (activeDm?.isGroup) {
+                updated = await addParticipantsToThread(activeDm._id, groupSelection);
+            } else {
+                const existing = (activeDm.participants || [])
+                    .map((p) => p._id)
+                    .filter((id) => id && id !== user?._id);
+                const ids = Array.from(new Set([...existing, ...groupSelection]));
+                updated = await createGroupThread(ids);
+            }
+            const entry = buildDmEntry(updated);
+            if (entry) {
+                setActiveDm(entry);
+                setViewMode('dm');
+                setThreadId(entry._id);
+                socket?.emit('join_dm', entry._id);
+                await fetchMessages(entry._id);
+                if (activeDmCall?.threadId === entry._id) {
+                    sendGroupCallInvite(groupSelection, entry);
+                }
+            }
+        } catch { }
+        setShowGroupAdd(false);
+        setGroupSelection([]);
+        setGroupError('');
+    };
+
+    const acceptDmCall = useCallback(async () => {
+        if (!incomingCall) return;
+        stopRingtone();
+        const { threadId: incomingThreadId, fromUser, threadMeta } = incomingCall;
+        setIncomingCall(null);
+        setViewMode('dm');
+        if (threadMeta?.isGroup) {
+            setThreadId(incomingThreadId);
+            socket?.emit('join_dm', incomingThreadId);
+            await fetchMessages(incomingThreadId);
+            let entry = null;
+            if (threadMeta?.participants) {
+                entry = buildDmEntry({
+                    _id: incomingThreadId,
+                    participants: threadMeta.participants,
+                    displayName: threadMeta.displayName,
+                    isGroup: true,
+                });
+            }
+            if (!entry) {
+                const threadInfo = await fetchThreadInfo(incomingThreadId);
+                entry = buildDmEntry(threadInfo);
+            }
+            if (entry) setActiveDm(entry);
+        } else {
+            const nextDm = {
+                _id: fromUser.userId,
+                displayName: fromUser.displayName || 'Friend',
+                avatar: fromUser.avatar || '',
+            };
+            setActiveDm(nextDm);
+            try {
+                const tid = await openThread(fromUser.userId);
+                setThreadId(tid);
+                socket?.emit('join_dm', tid);
+                await fetchMessages(tid);
+                const threadInfo = await fetchThreadInfo(tid);
+                const entry = buildDmEntry(threadInfo);
+                if (entry) setActiveDm(entry);
+            } catch { }
+        }
+        setActiveDmCall({ threadId: incomingThreadId, peer: fromUser, isGroup: threadMeta?.isGroup });
+        socket?.emit('dm:call:accept', { toUserId: fromUser.userId, threadId: incomingThreadId });
+        if (activeVoiceChannel?._id) {
+            leaveVoice();
+        }
+        joinVoice({ _id: `dm-${incomingThreadId}`, name: 'Direct Call' });
+    }, [incomingCall, stopRingtone, openThread, fetchMessages, fetchThreadInfo, buildDmEntry, socket, joinVoice, leaveVoice, activeVoiceChannel?._id, setThreadId]);
+
+    const declineDmCall = useCallback(() => {
+        if (!incomingCall) return;
+        stopRingtone();
+        socket?.emit('dm:call:decline', { toUserId: incomingCall.fromUser.userId, threadId: incomingCall.threadId });
+        setIncomingCall(null);
+    }, [incomingCall, socket, stopRingtone]);
+
+    const cancelDmCall = useCallback(() => {
+        if (!outgoingCall) return;
+        if (Array.isArray(outgoingCall.toUsers) && outgoingCall.toUsers.length > 0) {
+            outgoingCall.toUsers.forEach((id) => {
+                socket?.emit('dm:call:cancel', { toUserId: id, threadId: outgoingCall.threadId });
+            });
+        } else if (outgoingCall.toUser?._id) {
+            socket?.emit('dm:call:cancel', { toUserId: outgoingCall.toUser._id, threadId: outgoingCall.threadId });
+        }
+        setOutgoingCall(null);
+        setOngoingDmCalls((prev) => {
+            const next = new Set(prev);
+            next.delete(outgoingCall.threadId);
+            return next;
+        });
+    }, [outgoingCall, socket]);
+
+    const endDmCall = useCallback(() => {
+        if (!activeDmCall) return;
+        if (activeDmCall.isGroup) {
+            const participantCount = voiceParticipants?.length || 1;
+            if (participantCount <= 2 && activeDm?.participants?.length) {
+                activeDm.participants
+                    .filter((p) => p._id !== user?._id)
+                    .forEach((p) => {
+                        socket?.emit('dm:call:end', { toUserId: p._id, threadId: activeDmCall.threadId });
+                    });
+                setOngoingDmCalls((prev) => {
+                    const next = new Set(prev);
+                    next.delete(activeDmCall.threadId);
+                    return next;
+                });
+            }
+        } else {
+            const peerId = activeDmCall.peer?.userId || activeDmCall.peer?._id;
+            socket?.emit('dm:call:end', { toUserId: peerId, threadId: activeDmCall.threadId });
+            setOngoingDmCalls((prev) => {
+                const next = new Set(prev);
+                next.delete(activeDmCall.threadId);
+                return next;
+            });
+        }
+        setActiveDmCall(null);
+        if (isSharing) stopScreenShare();
+        leaveVoice();
+    }, [activeDmCall, activeDm?.participants, user?._id, socket, leaveVoice, isSharing, stopScreenShare, voiceParticipants]);
+
+    const handleLeaveGroup = useCallback(async () => {
+        if (!activeDm?.isGroup || !activeDm?._id) return;
+        if (activeDmCall?.threadId === activeDm._id) {
+            endDmCall();
+        }
+        try {
+            await leaveThread(activeDm._id);
+        } catch (error) {
+            console.log('Failed to leave group:', error);
+        } finally {
+            removeThread(activeDm._id);
+            setActiveDm(null);
+            setThreadId(null);
+            setDmText('');
+            setDmFiles([]);
+            setViewMode('dm');
+        }
+    }, [activeDm, activeDmCall?.threadId, endDmCall, leaveThread, removeThread, setThreadId]);
+
+    const exitDmCallForVoice = useCallback(() => {
+        if (incomingCall) {
+            declineDmCall();
+            return;
+        }
+        if (outgoingCall) {
+            cancelDmCall();
+            return;
+        }
+        if (activeDmCall) {
+            endDmCall();
+        }
+    }, [incomingCall, outgoingCall, activeDmCall, declineDmCall, cancelDmCall, endDmCall]);
+
+    const handleVoiceBarLeave = useCallback(() => {
+        if (activeDmCall) {
+            endDmCall();
+            return;
+        }
+        leaveVoice();
+    }, [activeDmCall, endDmCall, leaveVoice]);
 
     useEffect(() => {
         if (!friendError && !friendSuccess) return;
@@ -422,6 +1083,23 @@ const FeedPage = () => {
         return friends;
     }, [friends, activeTab]);
 
+    const pendingCount = incoming.length + outgoing.length;
+
+    const dmThreadEntries = useMemo(() => {
+        return (dmThreads || []).map((thread) => buildDmEntry(thread)).filter(Boolean);
+    }, [dmThreads, buildDmEntry]);
+
+    const directDmEntries = useMemo(() => dmThreadEntries.filter((dm) => !dm.isGroup), [dmThreadEntries]);
+    const groupDmEntries = useMemo(() => dmThreadEntries.filter((dm) => dm.isGroup), [dmThreadEntries]);
+
+    useEffect(() => {
+        if (!activeDm?._id) return;
+        const updated = dmThreadEntries.find((t) => t._id === activeDm._id);
+        if (updated) {
+            setActiveDm(updated);
+        }
+    }, [dmThreadEntries, activeDm?._id]);
+
     const handleSendRequest = async () => {
         if (!friendIdInput.trim()) return;
         await sendRequest(friendIdInput.trim());
@@ -437,6 +1115,7 @@ const FeedPage = () => {
             setShowMobileServers(false);
             return;
         }
+        clearChannels();
         setActiveCommunity(communityId);
         setActiveChannel(null);
         setViewMode('server');
@@ -475,19 +1154,19 @@ const FeedPage = () => {
             </div>
 
             <div className="mt-1 flex-1 overflow-y-auto px-1.5 pb-2 space-y-0.5">
-                {friends.length === 0 && (
+                {directDmEntries.length === 0 && (
                     <div className="px-2 py-3 text-xs text-discord-faint">No direct messages yet.</div>
                 )}
-                {friends.filter((dm) => dm._id !== user?._id).map((dm) => (
+                {directDmEntries.map((dm) => (
                     <button
                         key={dm._id}
                         onClick={async () => {
                             setActiveDm(dm);
                             setViewMode('dm');
                             setShowMobileDmList(false);
-                            const tid = await openThread(dm._id);
-                            socket?.emit('join_dm', tid);
-                            await fetchMessages(tid);
+                            setThreadId(dm._id);
+                            socket?.emit('join_dm', dm._id);
+                            await fetchMessages(dm._id);
                         }}
                         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-sm text-discord-muted hover:bg-discord-darkest/80 hover:text-discord-light cursor-pointer"
                     >
@@ -497,11 +1176,49 @@ const FeedPage = () => {
                             ) : (
                                 dm.displayName?.charAt(0).toUpperCase()
                             )}
-                            <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-discord-darker ${presenceColor(dm.presence)}`} />
+                            {!dm.isGroup && (
+                                <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-discord-darker ${presenceColor(dm.presence)}`} />
+                            )}
                         </div>
-                        <span className="truncate">{dm.displayName}</span>
+                        <div className="min-w-0">
+                            <span className="block truncate">{dm.displayName}</span>
+                            <span className="block text-[11px] text-discord-faint truncate">{dm.subtitle}</span>
+                        </div>
                     </button>
                 ))}
+                {groupDmEntries.length > 0 && (
+                    <>
+                        <div className="mt-3 px-2 text-[10px] font-semibold tracking-[0.12em] uppercase text-discord-faint">
+                            Group Messages
+                        </div>
+                        {groupDmEntries.map((dm) => (
+                            <button
+                                key={dm._id}
+                                onClick={async () => {
+                                    setActiveDm(dm);
+                                    setViewMode('dm');
+                                    setShowMobileDmList(false);
+                                    setThreadId(dm._id);
+                                    socket?.emit('join_dm', dm._id);
+                                    await fetchMessages(dm._id);
+                                }}
+                                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-sm text-discord-muted hover:bg-discord-darkest/80 hover:text-discord-light cursor-pointer"
+                            >
+                                <div className="relative w-8 h-8 rounded-full bg-discord-darkest flex items-center justify-center text-xs font-semibold text-discord-light">
+                                    {dm.avatar ? (
+                                        <img src={dm.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+                                    ) : (
+                                        dm.displayName?.charAt(0).toUpperCase()
+                                    )}
+                                </div>
+                                <div className="min-w-0">
+                                    <span className="block truncate">{dm.displayName}</span>
+                                    <span className="block text-[11px] text-discord-faint truncate">{dm.subtitle}</span>
+                                </div>
+                            </button>
+                        ))}
+                    </>
+                )}
             </div>
 
             <div className="h-14 px-2 border-t border-discord-darkest/80 flex items-center gap-2 bg-discord-darkest/80 cursor-pointer" onClick={() => setShowProfilePopout(true)}>
@@ -522,13 +1239,14 @@ const FeedPage = () => {
                     <p className="text-[11px] text-discord-faint truncate">{user?._id || username}</p>
                 </div>
                 <div className="ml-auto flex items-center gap-1.5">
-                    <button className="w-7 h-7 rounded-md bg-discord-darkest flex items-center justify-center hover:bg-discord-border-light/40 cursor-pointer">
-                        <Mic className="w-3.5 h-3.5 text-discord-muted" />
-                    </button>
-                    <button className="w-7 h-7 rounded-md bg-discord-darkest flex items-center justify-center hover:bg-discord-border-light/40 cursor-pointer">
-                        <Headphones className="w-3.5 h-3.5 text-discord-muted" />
-                    </button>
-                    <button className="w-7 h-7 rounded-md bg-discord-darkest flex items-center justify-center hover:bg-discord-border-light/40 cursor-pointer">
+                    <button
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setShowProfileSettings(true);
+                        }}
+                        className="w-7 h-7 rounded-md bg-discord-darkest flex items-center justify-center hover:bg-discord-border-light/40 cursor-pointer"
+                        title="Settings"
+                    >
                         <Settings className="w-3.5 h-3.5 text-discord-muted" />
                     </button>
                 </div>
@@ -594,13 +1312,23 @@ const FeedPage = () => {
                     onClose={() => setShowMobileSidebar(false)}
                     animateClassName={`${switchAnimBase} ${switchAnimClass}`}
                     onProfileClick={() => setShowProfilePopout(true)}
+                    onSettingsClick={() => setShowProfileSettings(true)}
+                    onFriendsClick={() => {
+                        setViewMode('friends');
+                        setActiveTab('all');
+                        setShowMobileSidebar(false);
+                        setShowMobileServers(false);
+                    }}
                     onOpenChannelSettings={handleOpenChannelSettings}
                     onVoiceChannelClick={(channel) => {
                         if (!channel?._id) return;
+                        if (incomingCall || outgoingCall || activeDmCall) {
+                            exitDmCallForVoice();
+                        }
                         if (activeVoiceChannel?._id === channel._id) {
                             leaveVoice();
                         } else {
-                            joinVoice(channel);
+                            joinVoice({ ...channel, communityId: activeCommunityId });
                         }
                     }}
                     voiceState={{
@@ -608,6 +1336,7 @@ const FeedPage = () => {
                         activeChannelId: activeVoiceChannel?._id,
                         activeChannelName: activeVoiceChannel?.name,
                         members: voiceParticipants,
+                        voicePresence,
                         connectedPeerIds,
                         memberCount: voiceParticipants.length,
                         elapsed,
@@ -616,13 +1345,13 @@ const FeedPage = () => {
                         isDeafened,
                         isSharing,
                         noiseReduction,
-                        hasRemoteStream: remoteVideos.length > 0 || remoteMedia.length > 0,
+                        hasRemoteStream: remoteScreenStreams.length > 0 || remoteMedia.length > 0,
                         onToggleViewer: () => setShowStreamViewer((prev) => !prev),
                         onToggleMute: toggleMute,
                         onToggleDeafen: toggleDeafen,
                         onToggleNoiseReduction: toggleNoiseReduction,
                         onToggleShare: isSharing ? stopScreenShare : startScreenShare,
-                        onLeave: leaveVoice,
+                        onLeave: handleVoiceBarLeave,
                     }}
                 />
             ) : (
@@ -728,8 +1457,14 @@ const FeedPage = () => {
                         >
                             <Menu className="w-4 h-4" />
                         </button>
-                        <Hash className="w-4 h-4" />
-                        <span>{activeChannel?.name || 'general'}</span>
+                        {activeChannel?.name ? (
+                            <>
+                                <Hash className="w-4 h-4" />
+                                <span>{activeChannel.name}</span>
+                            </>
+                        ) : (
+                            <span className="text-discord-faint text-xs uppercase tracking-[0.2em]">Loading channel</span>
+                        )}
                     </div>
                     <div className="flex items-center gap-3 text-discord-faint">
                         <button
@@ -834,6 +1569,34 @@ const FeedPage = () => {
                                 }}
                                 onOpenSidebar={() => setShowMobileDmList(true)}
                                 onOpenServers={() => setShowMobileServers(true)}
+                                onCall={startDmCall}
+                                onAddToGroup={openGroupAddModal}
+                                onLeaveGroup={handleLeaveGroup}
+                                canAddToGroup={!!activeDm}
+                                callDisabled={!threadId || !!outgoingCall || !!incomingCall || !!activeDmCall}
+                                activeCall={activeDmCall}
+                                selfProfile={{ avatar: profile?.avatar || '', displayName }}
+                                onToggleMute={toggleMute}
+                                onToggleCamera={() => {
+                                    if (isCameraOn) stopCamera();
+                                    else startCamera();
+                                }}
+                                onToggleShare={() => {
+                                    if (isSharing) stopScreenShare();
+                                    else startScreenShare();
+                                }}
+                                onEndCall={endDmCall}
+                                isMuted={isMuted}
+                                isSharing={isSharing}
+                                isCameraOn={isCameraOn}
+                                screenShareStream={screenShareStream}
+                                screenShareStreams={screenShareTiles}
+                                localCameraStream={localCameraStream}
+                                remoteCameraStream={remoteCameraStream}
+                                remoteCameraStreams={remoteCameraStreams}
+                                participants={voiceParticipants}
+                                isRemoteScreenShare={isRemoteScreenShare}
+                                onOpenStreamFullscreen={(stream) => setFullscreenStream(stream)}
                             />
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-discord-faint">Select a friend to start chatting.</div>
@@ -884,6 +1647,11 @@ const FeedPage = () => {
                                         }`}
                                     >
                                         Pending
+                                        {pendingCount > 0 && (
+                                            <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-blurple/80 text-[10px] font-semibold text-white">
+                                                {pendingCount}
+                                            </span>
+                                        )}
                                     </button>
                                     <button
                                         onClick={() => setActiveTab('invites')}
@@ -893,7 +1661,9 @@ const FeedPage = () => {
                                     >
                                         Invites
                                         {invites.length > 0 && (
-                                            <span className="ml-1 text-[10px] text-discord-faint">({invites.length})</span>
+                                            <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-blurple/80 text-[10px] font-semibold text-white">
+                                                {invites.length}
+                                            </span>
                                         )}
                                     </button>
                                 </div>
@@ -1119,6 +1889,13 @@ const FeedPage = () => {
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <button
+                                                    onClick={() => startCallForFriend(friend)}
+                                                    className="w-7 h-7 rounded-full bg-discord-darkest flex items-center justify-center hover:bg-discord-border-light/40 cursor-pointer"
+                                                    title="Call"
+                                                >
+                                                    <Phone className="w-3.5 h-3.5 text-discord-faint" />
+                                                </button>
+                                                <button
                                                     onClick={() => openDmForFriend(friend)}
                                                     className="w-7 h-7 rounded-full bg-discord-darkest flex items-center justify-center hover:bg-discord-border-light/40 cursor-pointer"
                                                     title="Message"
@@ -1208,23 +1985,182 @@ const FeedPage = () => {
                 }}
             />
 
+            {incomingCall && (
+                <div className="dm-call-modal fixed inset-0 z-[80] flex items-center justify-center">
+                    <div className="dm-call-card dm-call-card--incoming w-[360px] rounded-3xl border border-discord-border/60 shadow-2xl p-7 text-center space-y-5">
+                        <div className="dm-call-card__ambient" aria-hidden="true">
+                            <span className="dm-call-card__orb dm-call-card__orb--one" />
+                            <span className="dm-call-card__orb dm-call-card__orb--two" />
+                            <span className="dm-call-card__ring dm-call-card__ring--one" />
+                            <span className="dm-call-card__ring dm-call-card__ring--two" />
+                        </div>
+                        <div className="dm-call-card__content space-y-4">
+                            <div className="dm-call-avatar-wrap">
+                                <div className="dm-call-avatar w-20 h-20 rounded-full bg-discord-darkest mx-auto flex items-center justify-center text-2xl font-bold text-white overflow-hidden">
+                                    {incomingCall.threadMeta?.isGroup ? (
+                                        (incomingCall.threadMeta?.displayName || 'G').charAt(0).toUpperCase()
+                                    ) : incomingCall.fromUser?.avatar ? (
+                                        <img src={incomingCall.fromUser.avatar} alt="" className="w-20 h-20 object-cover" />
+                                    ) : (
+                                        (incomingCall.fromUser?.displayName || 'F').charAt(0).toUpperCase()
+                                    )}
+                                </div>
+                                <span className="dm-call-avatar-pulse" aria-hidden="true" />
+                                <span className="dm-call-avatar-pulse dm-call-avatar-pulse--delay" aria-hidden="true" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-discord-faint uppercase tracking-[0.3em]">Incoming</p>
+                                <p className="text-xl font-semibold text-white mt-2">
+                                    {incomingCall.threadMeta?.displayName || incomingCall.fromUser?.displayName || 'Friend'}
+                                </p>
+                            </div>
+                            <div className="dm-call-actions flex items-center justify-center gap-4">
+                                <button
+                                    onClick={declineDmCall}
+                                    className="dm-call-action dm-call-action--decline w-12 h-12 rounded-full text-white flex items-center justify-center"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                                <button
+                                    onClick={acceptDmCall}
+                                    className="dm-call-action dm-call-action--accept w-12 h-12 rounded-full text-white flex items-center justify-center"
+                                >
+                                    <Phone className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showGroupAdd && (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div className="w-[520px] max-w-[92vw] rounded-2xl border border-discord-border/60 bg-discord-darker shadow-2xl">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-discord-darkest/80">
+                            <div>
+                                <h3 className="text-lg font-semibold text-white">Add Friends to Group DM</h3>
+                                <p className="text-xs text-discord-faint mt-1">
+                                    Select friends to add to this group conversation.
+                                </p>
+                                <p className="text-[11px] text-discord-faint mt-1">
+                                    {remainingSlots} slots left (max {maxGroupSize} members).
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowGroupAdd(false)}
+                                className="w-8 h-8 rounded-full bg-discord-darkest/70 text-discord-faint hover:text-white flex items-center justify-center"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="px-6 pt-4 pb-2">
+                            <div className="flex items-center gap-3">
+                                <input
+                                    value={groupSearch}
+                                    onChange={(e) => setGroupSearch(e.target.value)}
+                                    placeholder="Search for friends"
+                                    className="flex-1 px-3 py-2 rounded-xl bg-discord-darkest text-sm text-discord-light border border-discord-border/60 focus:outline-none focus:ring-2 focus:ring-blurple/60"
+                                />
+                                <button
+                                    onClick={handleAddGroupMembers}
+                                    disabled={groupSelection.length === 0 || remainingSlots === 0}
+                                    className="px-4 py-2 rounded-xl bg-blurple text-white text-sm font-semibold disabled:opacity-50"
+                                >
+                                    Add
+                                </button>
+                            </div>
+                        </div>
+                        <div className="px-6 pb-5 max-h-[360px] overflow-y-auto space-y-1">
+                            {groupError && (
+                                <div className="px-3 py-2 rounded-lg text-xs text-discord-red bg-discord-red/10 border border-discord-red/30">
+                                    {groupError}
+                                </div>
+                            )}
+                            {groupCandidateList.length === 0 && (
+                                <div className="py-8 text-center text-sm text-discord-faint">No friends available.</div>
+                            )}
+                            {groupCandidateList.map((friend) => (
+                                (() => {
+                                    const atLimit = remainingSlots <= groupSelection.length;
+                                    const isSelected = groupSelection.includes(friend._id);
+                                    const disabled = !isSelected && atLimit;
+                                    return (
+                                <button
+                                    key={friend._id}
+                                    onClick={() => !disabled && toggleGroupSelection(friend._id)}
+                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left ${
+                                        disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-discord-darkest/70'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="relative w-10 h-10 rounded-full bg-discord-darkest flex items-center justify-center text-sm font-semibold text-discord-light">
+                                            {friend.avatar ? (
+                                                <img src={friend.avatar} alt="" className="w-10 h-10 rounded-full object-cover" />
+                                            ) : (
+                                                friend.displayName?.charAt(0).toUpperCase()
+                                            )}
+                                            <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-discord-darker ${presenceColor(friend.presence)}`} />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-discord-light font-semibold">{friend.displayName}</p>
+                                            <p className="text-xs text-discord-faint">{friend.username}</p>
+                                        </div>
+                                    </div>
+                                    <div className={`w-5 h-5 rounded-md border ${isSelected ? 'bg-blurple border-blurple' : 'border-discord-border/60'}`} />
+                                </button>
+                                    );
+                                })()
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {outgoingCall && (
+                <div className="dm-call-modal dm-call-modal--soft fixed inset-0 z-[70] flex items-center justify-center">
+                    <div className="dm-call-card dm-call-card--outgoing w-[300px] rounded-3xl border border-discord-border/60 shadow-2xl p-6 text-center space-y-4">
+                        <div className="dm-call-card__ambient" aria-hidden="true">
+                            <span className="dm-call-card__orb dm-call-card__orb--one" />
+                            <span className="dm-call-card__orb dm-call-card__orb--two" />
+                        </div>
+                        <div className="dm-call-card__content space-y-3">
+                            <p className="dm-call-status text-xs text-discord-faint uppercase tracking-[0.35em]">
+                                Calling
+                                <span className="dm-call-dots" aria-hidden="true">
+                                    <span />
+                                    <span />
+                                    <span />
+                                </span>
+                            </p>
+                            <p className="text-xl font-semibold text-white">{outgoingCall.toUser?.displayName || 'Friend'}</p>
+                            <button
+                                onClick={cancelDmCall}
+                                className="dm-call-action dm-call-action--decline px-6 py-2.5 rounded-full text-white text-sm font-semibold"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {remoteMedia.map((item) => (
                 <VoiceAudioPlayer key={item.socketId} stream={item.stream} muted={isDeafened} />
             ))}
 
-            {remoteVideos.length > 0 && showStreamViewer && (
+            {remoteScreenStreams.length > 0 && showStreamViewer && (
                 <div className="fixed bottom-6 right-6 z-40 w-[320px] max-w-[90vw] rounded-2xl bg-discord-darkest/90 border border-discord-border/60 shadow-2xl p-3 space-y-2">
                     <div className="flex items-center justify-between">
                         <p className="text-xs font-semibold text-discord-faint">Screen Share</p>
                         <button
-                            onClick={() => setShowStreamFullscreen(true)}
+                            onClick={() => setFullscreenStream(remoteScreenStreams[0]?.stream || null)}
                             className="text-[11px] px-2 py-1 rounded-md bg-discord-darkest text-discord-light hover:bg-discord-border-light/40"
                         >
                             Fullscreen
                         </button>
                     </div>
                     <div className="space-y-2">
-                        {remoteVideos.map((item, idx) => (
+                        {remoteScreenStreams.map((item, idx) => (
                             <div key={item.socketId} className="w-full aspect-video rounded-xl bg-black/60 overflow-hidden">
                                 <VoiceVideoPlayer
                                     stream={item.stream}
@@ -1238,14 +2174,14 @@ const FeedPage = () => {
                 </div>
             )}
 
-            {remoteVideos.length > 0 && showStreamFullscreen && (
+            {fullscreenStream && showStreamFullscreen && (
                 <div
                     className="fixed inset-0 z-[90] bg-black/90 flex items-center justify-center"
-                    onClick={() => setShowStreamFullscreen(false)}
+                    onClick={() => setFullscreenStream(null)}
                 >
                     <div className="w-[92vw] h-[92vh] max-w-[1400px] max-h-[880px] rounded-2xl bg-black/80 border border-discord-border/60 shadow-2xl p-3">
                         <VoiceVideoPlayer
-                            stream={remoteVideos[0].stream}
+                            stream={fullscreenStream}
                             muted
                             className="w-full h-full object-contain rounded-xl bg-black"
                         />

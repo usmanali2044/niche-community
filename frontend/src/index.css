@@ -606,6 +606,374 @@ body {
   border-image: linear-gradient(to bottom, #d4a017, #f5d061) 1;
 }
 
+/* ── DM Call Ambient Animation ───────────────────────────────────────────── */
+.dm-call {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(28, 30, 36, 0.95), rgba(22, 24, 29, 0.95));
+  box-shadow: 0 18px 40px rgba(8, 9, 14, 0.35);
+}
+
+.dm-call__orbs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dm-call__orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(4px);
+  opacity: 0.55;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0));
+  animation: dmCallOrb 12s ease-in-out infinite;
+}
+
+.dm-call__orb--one {
+  width: 180px;
+  height: 180px;
+  top: -60px;
+  left: -40px;
+}
+
+.dm-call__orb--two {
+  width: 220px;
+  height: 220px;
+  bottom: -80px;
+  right: -60px;
+  animation-delay: -5s;
+}
+
+.dm-call__spark {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.6);
+  animation: dmCallSpark 6s ease-in-out infinite;
+}
+
+.dm-call__spark--one {
+  top: 18%;
+  left: 46%;
+}
+
+.dm-call__spark--two {
+  bottom: 22%;
+  right: 32%;
+  animation-delay: -2.5s;
+}
+
+.dm-call__tiles {
+  position: relative;
+  z-index: 1;
+}
+
+.dm-call__tile {
+  position: relative;
+  background: rgba(58, 88, 103, 0.95);
+  animation: dmCallFloat 7.5s ease-in-out infinite;
+}
+
+.dm-call__tile--friend {
+  background: rgba(124, 149, 217, 0.95);
+  animation-delay: -3s;
+}
+
+.dm-call__tile--screen {
+  background: rgba(34, 36, 44, 0.95);
+  cursor: pointer;
+}
+
+.dm-call__tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  opacity: 0;
+  animation: dmCallSheen 6s ease-in-out infinite;
+}
+
+.dm-call__avatar {
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.2);
+  animation: dmCallPulse 3.5s ease-in-out infinite;
+}
+
+.dm-call__controls {
+  position: relative;
+  z-index: 1;
+}
+
+.dm-call__btn {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dm-call__btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(8, 8, 12, 0.35);
+}
+
+.dm-call__end {
+  box-shadow: 0 10px 20px rgba(239, 68, 68, 0.35);
+}
+
+/* ── DM Call Modal Cards ────────────────────────────────────────────────── */
+.dm-call-modal {
+  background: radial-gradient(circle at 20% 20%, rgba(80, 90, 160, 0.2), rgba(5, 6, 10, 0.7));
+  backdrop-filter: blur(10px);
+}
+
+.dm-call-modal--soft {
+  background: radial-gradient(circle at 20% 20%, rgba(80, 90, 160, 0.18), rgba(5, 6, 10, 0.5));
+}
+
+.dm-call-card {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(34, 36, 44, 0.95), rgba(24, 26, 33, 0.95));
+  box-shadow: 0 22px 45px rgba(8, 9, 14, 0.45);
+  animation: dmCallCardFloat 10s ease-in-out infinite;
+}
+
+.dm-call-card--incoming {
+  background: linear-gradient(160deg, rgba(36, 40, 56, 0.98), rgba(24, 26, 34, 0.98));
+}
+
+.dm-call-card--outgoing {
+  background: linear-gradient(150deg, rgba(30, 33, 45, 0.98), rgba(22, 24, 31, 0.98));
+}
+
+.dm-call-card__ambient {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.dm-call-card__orb {
+  position: absolute;
+  width: 160px;
+  height: 160px;
+  border-radius: 9999px;
+  filter: blur(8px);
+  opacity: 0.5;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0));
+  animation: dmCallOrb 14s ease-in-out infinite;
+}
+
+.dm-call-card__orb--one {
+  top: -60px;
+  left: -40px;
+}
+
+.dm-call-card__orb--two {
+  bottom: -70px;
+  right: -30px;
+  animation-delay: -6s;
+}
+
+.dm-call-card__ring {
+  position: absolute;
+  inset: 18%;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 40px rgba(105, 119, 255, 0.16);
+  animation: dmCallRing 6s ease-in-out infinite;
+}
+
+.dm-call-card__ring--two {
+  inset: 28%;
+  animation-delay: -3s;
+  opacity: 0.5;
+}
+
+.dm-call-card__content {
+  position: relative;
+  z-index: 1;
+}
+
+.dm-call-avatar-wrap {
+  position: relative;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.dm-call-avatar-pulse {
+  position: absolute;
+  inset: -12px;
+  border-radius: 9999px;
+  border: 2px solid rgba(99, 102, 241, 0.4);
+  animation: dmCallPulseRing 2.8s ease-out infinite;
+}
+
+.dm-call-avatar-pulse--delay {
+  animation-delay: -1.4s;
+}
+
+.dm-call-actions {
+  position: relative;
+  z-index: 1;
+}
+
+.dm-call-action {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 10px 20px rgba(8, 8, 12, 0.35);
+}
+
+.dm-call-action:hover {
+  transform: translateY(-2px) scale(1.03);
+}
+
+.dm-call-action--accept {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.95), rgba(52, 211, 153, 0.95));
+}
+
+.dm-call-action--decline {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(248, 113, 113, 0.95));
+}
+
+.dm-call-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.dm-call-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.dm-call-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(229, 231, 235, 0.7);
+  animation: dmCallDots 1.4s ease-in-out infinite;
+}
+
+.dm-call-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.dm-call-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dmCallCardFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes dmCallRing {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+@keyframes dmCallPulseRing {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes dmCallDots {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@keyframes dmCallFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes dmCallSheen {
+  0%, 60% {
+    opacity: 0;
+    transform: translateX(-40%);
+  }
+  70% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(40%);
+  }
+}
+
+@keyframes dmCallPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes dmCallOrb {
+  0%, 100% {
+    transform: translateY(0px) translateX(0px);
+  }
+  50% {
+    transform: translateY(18px) translateX(10px);
+  }
+}
+
+@keyframes dmCallSpark {
+  0%, 100% {
+    transform: scale(0.8);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dm-call__orb,
+  .dm-call__tile,
+  .dm-call__spark,
+  .dm-call__avatar,
+  .dm-call__tile::after,
+  .dm-call-card,
+  .dm-call-card__orb,
+  .dm-call-card__ring,
+  .dm-call-avatar-pulse,
+  .dm-call-dots span {
+    animation: none !important;
+  }
+}
+
 /* ── Contact Section Ambient Motion ─────────────────────────────────────── */
 .contact-ambience {
   position: absolute;

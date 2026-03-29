@@ -18,7 +18,7 @@ import EventCreateModal from './EventCreateModal';
 import EventDetailsModal from './EventDetailsModal';
 import VoiceConnectedBar from './VoiceConnectedBar';
 
-const Sidebar = ({ isOpen, onClose, onProfileClick, onVoiceChannelClick, onOpenChannelSettings, voiceState, animateClassName = '' }) => {
+const Sidebar = ({ isOpen, onClose, onProfileClick, onFriendsClick, onSettingsClick, onVoiceChannelClick, onOpenChannelSettings, voiceState, animateClassName = '' }) => {
     const navigate = useNavigate();
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showServerMenu, setShowServerMenu] = useState(false);
@@ -379,7 +379,8 @@ const Sidebar = ({ isOpen, onClose, onProfileClick, onVoiceChannelClick, onOpenC
                         {(channels.filter((ch) => ch.type === 'voice').map((ch) => ch.name)).length > 0
                             ? channels.filter((ch) => ch.type === 'voice').map((ch) => {
                                 const isActive = voiceState?.activeChannelId === ch._id;
-                                const members = isActive ? voiceState?.members || [] : [];
+                                const presenceMembers = voiceState?.voicePresence?.[ch._id] || [];
+                                const members = isActive ? voiceState?.members || [] : presenceMembers;
                                 const connectedIds = isActive ? (voiceState?.connectedPeerIds || []) : [];
                                 return (
                                     <div key={ch._id}>
@@ -393,20 +394,22 @@ const Sidebar = ({ isOpen, onClose, onProfileClick, onVoiceChannelClick, onOpenC
                                         >
                                             <Volume2 className="w-4 h-4 shrink-0" strokeWidth={2} />
                                             <span className="text-sm font-medium truncate">{ch.name}</span>
-                                            {isActive && (
+                                            {(isActive || members.length > 0) && (
                                                 <div className="ml-auto flex items-center gap-2">
                                                     {members.length > 0 && (
                                                         <span className="text-[11px] text-discord-faint font-semibold">
                                                             {members.length}
                                                         </span>
                                                     )}
-                                                    <span className="text-xs text-discord-green font-semibold">
-                                                        {voiceState?.elapsedLabel || '0:00'}
-                                                    </span>
+                                                    {isActive && (
+                                                        <span className="text-xs text-discord-green font-semibold">
+                                                            {voiceState?.elapsedLabel || '0:00'}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             )}
                                         </button>
-                                        {isActive && members.length > 0 && (
+                                        {members.length > 0 && (
                                             <div className="mt-1 ml-7 space-y-1">
                                                 {members.map((m) => (
                                                     <div key={m.socketId} className="flex items-center gap-2 text-xs text-discord-light">
@@ -418,11 +421,15 @@ const Sidebar = ({ isOpen, onClose, onProfileClick, onVoiceChannelClick, onOpenC
                                                             )}
                                                             <span
                                                                 className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-discord-sidebar ${
-                                                                    m.isLocal || connectedIds.includes(m.socketId)
-                                                                        ? 'bg-discord-green'
-                                                                        : 'bg-discord-faint/60'
+                                                                    isActive
+                                                                        ? (m.isLocal || connectedIds.includes(m.socketId) ? 'bg-discord-green' : 'bg-discord-faint/60')
+                                                                        : 'bg-discord-green'
                                                                 }`}
-                                                                title={m.isLocal || connectedIds.includes(m.socketId) ? 'Connected' : 'Connecting'}
+                                                                title={
+                                                                    isActive
+                                                                        ? (m.isLocal || connectedIds.includes(m.socketId) ? 'Connected' : 'Connecting')
+                                                                        : 'In voice'
+                                                                }
                                                             />
                                                         </div>
                                                         <span className="truncate text-discord-light">{m.displayName}</span>
@@ -483,10 +490,24 @@ const Sidebar = ({ isOpen, onClose, onProfileClick, onVoiceChannelClick, onOpenC
                     <p className="text-[11px] text-discord-faint truncate">{profile?.bio || 'No bio yet'}</p>
                 </div>
                 <div className="ml-auto flex items-center gap-1">
-                    <button className="w-7 h-7 rounded-md bg-discord-darkest flex items-center justify-center hover:bg-discord-border-light/40 cursor-pointer">
+                    <button
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onFriendsClick?.();
+                        }}
+                        className="w-7 h-7 rounded-md bg-discord-darkest flex items-center justify-center hover:bg-discord-border-light/40 cursor-pointer"
+                        title="Friends"
+                    >
                         <Users className="w-3.5 h-3.5 text-discord-muted" />
                     </button>
-                    <button className="w-7 h-7 rounded-md bg-discord-darkest flex items-center justify-center hover:bg-discord-border-light/40 cursor-pointer">
+                    <button
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onSettingsClick?.();
+                        }}
+                        className="w-7 h-7 rounded-md bg-discord-darkest flex items-center justify-center hover:bg-discord-border-light/40 cursor-pointer"
+                        title="Settings"
+                    >
                         <Settings className="w-3.5 h-3.5 text-discord-muted" />
                     </button>
                 </div>

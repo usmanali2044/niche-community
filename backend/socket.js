@@ -69,7 +69,33 @@ io.on("connection", (socket) => {
     socket.on("join_community_room", (communityId) => {
         if (communityId) {
             socket.join(`community:${communityId}`);
+            socket.data.activeCommunityId = communityId;
             console.log(`   → ${socket.id} joined room community:${communityId}`);
+
+            if (io.voiceState?.channels && io.voiceState?.channelCommunity) {
+                const targetId = communityId?.toString?.() || String(communityId);
+                io.voiceState.channelCommunity.forEach((communityForChannel, channelId) => {
+                    const channelCommunityId = communityForChannel?.toString?.() || String(communityForChannel);
+                    if (channelCommunityId !== targetId) return;
+                    const channelMap = io.voiceState.channels.get(channelId);
+                    const members = channelMap
+                        ? Array.from(channelMap.entries()).map(([sid, info]) => ({
+                              socketId: sid,
+                              ...info,
+                          }))
+                        : [];
+                    socket.emit("voice:members", { channelId, members });
+                });
+            }
+        }
+    });
+
+    socket.on("leave_community_room", (communityId) => {
+        if (communityId) {
+            socket.leave(`community:${communityId}`);
+            if (socket.data.activeCommunityId === communityId) {
+                socket.data.activeCommunityId = null;
+            }
         }
     });
 
@@ -100,6 +126,36 @@ io.on("connection", (socket) => {
         }
     });
 
+    // ── Direct Message Calls ───────────────────────────────────────────────
+    socket.on("dm:call:start", ({ toUserId, threadId, fromUser, threadMeta }) => {
+        if (!toUserId || !threadId) return;
+        io.to(`user:${toUserId}`).emit("dm:call:incoming", {
+            threadId,
+            fromUser,
+            threadMeta,
+        });
+    });
+
+    socket.on("dm:call:accept", ({ toUserId, threadId }) => {
+        if (!toUserId || !threadId) return;
+        io.to(`user:${toUserId}`).emit("dm:call:accepted", { threadId });
+    });
+
+    socket.on("dm:call:decline", ({ toUserId, threadId }) => {
+        if (!toUserId || !threadId) return;
+        io.to(`user:${toUserId}`).emit("dm:call:declined", { threadId });
+    });
+
+    socket.on("dm:call:cancel", ({ toUserId, threadId }) => {
+        if (!toUserId || !threadId) return;
+        io.to(`user:${toUserId}`).emit("dm:call:cancelled", { threadId });
+    });
+
+    socket.on("dm:call:end", ({ toUserId, threadId }) => {
+        if (!toUserId || !threadId) return;
+        io.to(`user:${toUserId}`).emit("dm:call:ended", { threadId });
+    });
+
     // Join a channel room for realtime chat
     socket.on("join_channel", (channelId) => {
         if (channelId) {
@@ -125,10 +181,11 @@ io.on("connection", (socket) => {
         io.voiceState = {
             channels: new Map(), // channelId -> Map(socketId -> user)
             socketToChannel: new Map(),
+            channelCommunity: new Map(), // channelId -> communityId
         };
     }
 
-    const emitVoiceMembers = (channelId) => {
+    const emitVoiceMembers = (channelId, communityOverride) => {
         const channelKey = channelId?.toString?.() || String(channelId);
         const channelMap = io.voiceState.channels.get(channelKey);
         const members = channelMap
@@ -138,12 +195,17 @@ io.on("connection", (socket) => {
               }))
             : [];
         io.to(`voice:${channelKey}`).emit("voice:members", { channelId: channelKey, members });
+        const communityId = communityOverride || io.voiceState.channelCommunity.get(channelKey);
+        if (communityId) {
+            io.to(`community:${communityId}`).emit("voice:members", { channelId: channelKey, members });
+        }
     };
 
     const leaveVoiceChannel = () => {
         const currentChannel = io.voiceState.socketToChannel.get(socket.id);
         if (!currentChannel) return;
         const channelMap = io.voiceState.channels.get(currentChannel);
+        const communityId = io.voiceState.channelCommunity.get(currentChannel);
         if (channelMap) {
             channelMap.delete(socket.id);
             if (channelMap.size === 0) {
@@ -153,10 +215,13 @@ io.on("connection", (socket) => {
         io.voiceState.socketToChannel.delete(socket.id);
         socket.leave(`voice:${currentChannel}`);
         socket.to(`voice:${currentChannel}`).emit("voice:peer-left", { socketId: socket.id });
-        emitVoiceMembers(currentChannel);
+        emitVoiceMembers(currentChannel, communityId);
+        if (!io.voiceState.channels.get(currentChannel)) {
+            io.voiceState.channelCommunity.delete(currentChannel);
+        }
     };
 
-    socket.on("voice:join", ({ channelId, user }) => {
+    socket.on("voice:join", ({ channelId, user, communityId }) => {
         if (!channelId) return;
         const channelKey = channelId?.toString?.() || String(channelId);
         leaveVoiceChannel();
@@ -170,6 +235,10 @@ io.on("connection", (socket) => {
         });
         io.voiceState.channels.set(channelKey, channelMap);
         io.voiceState.socketToChannel.set(socket.id, channelKey);
+        const resolvedCommunityId = communityId || socket.data.activeCommunityId;
+        if (resolvedCommunityId) {
+            io.voiceState.channelCommunity.set(channelKey, resolvedCommunityId);
+        }
 
         const peers = Array.from(channelMap.entries())
             .filter(([sid]) => sid !== socket.id)
@@ -197,6 +266,16 @@ io.on("connection", (socket) => {
     socket.on("voice:share-stop", ({ channelId }) => {
         if (!channelId) return;
         socket.to(`voice:${channelId}`).emit("voice:share-stopped", { socketId: socket.id });
+    });
+
+    socket.on("voice:share-start", ({ channelId }) => {
+        if (!channelId) return;
+        socket.to(`voice:${channelId}`).emit("voice:share-started", { socketId: socket.id });
+    });
+
+    socket.on("voice:camera-stop", ({ channelId }) => {
+        if (!channelId) return;
+        socket.to(`voice:${channelId}`).emit("voice:camera-stopped", { socketId: socket.id });
     });
 
     socket.on("disconnect", () => {

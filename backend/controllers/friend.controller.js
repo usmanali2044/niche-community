@@ -1,4 +1,5 @@
 import User from "../models/user.model.js";
+import Notification from "../models/notification.model.js";
 
 const presenceFromLastLogin = (profilePresence, lastLogin) => {
     if (["online", "idle", "dnd", "offline"].includes(profilePresence)) return profilePresence;
@@ -87,7 +88,10 @@ export const sendRequest = async (req, res) => {
         if (targetId === req.userId) return res.status(400).json({ success: false, message: "You cannot add yourself" });
 
         const [sender, target] = await Promise.all([
-            User.findById(req.userId).select("friends friendRequests").lean(),
+            User.findById(req.userId)
+                .select("name email friends friendRequests profileId")
+                .populate("profileId", "avatar displayName")
+                .lean(),
             User.findById(targetId).select("friends friendRequests").lean(),
         ]);
 
@@ -111,6 +115,14 @@ export const sendRequest = async (req, res) => {
                     $addToSet: { friends: req.userId },
                 }),
             ]);
+            // Realtime notify both users about new friendship + requests update
+            try {
+                const { io } = await import("../socket.js");
+                io.to(`user:${targetId}`).emit("friends:updated", { userId: targetId });
+                io.to(`user:${req.userId}`).emit("friends:updated", { userId: req.userId });
+                io.to(`user:${targetId}`).emit("friends:requests:update", { userId: targetId });
+                io.to(`user:${req.userId}`).emit("friends:requests:update", { userId: req.userId });
+            } catch { }
             return res.status(200).json({ success: true, message: "Friend request accepted" });
         }
 
@@ -125,11 +137,24 @@ export const sendRequest = async (req, res) => {
 
         res.status(200).json({ success: true, message: "Friend request sent" });
 
-        // Realtime notify both users
+        // Realtime notify both users (requests update should fire even if notification fails)
         try {
             const { io } = await import("../socket.js");
             io.to(`user:${targetId}`).emit("friends:requests:update", { userId: targetId });
             io.to(`user:${req.userId}`).emit("friends:requests:update", { userId: req.userId });
+            try {
+                const notification = await Notification.create({
+                    userId: targetId,
+                    type: "friend",
+                    meta: {
+                        action: "request",
+                        requesterId: req.userId,
+                        requesterName: sender?.profileId?.displayName || sender?.name || "Member",
+                        requesterAvatar: sender?.profileId?.avatar || "",
+                    },
+                });
+                io.to(`user:${targetId}`).emit("new_notification", notification);
+            } catch { }
         } catch { }
     } catch (error) {
         console.log("Error in sendRequest:", error);
@@ -142,6 +167,11 @@ export const acceptRequest = async (req, res) => {
     try {
         const { requesterId } = req.body;
         if (!requesterId) return res.status(400).json({ success: false, message: "requesterId is required" });
+
+        const accepter = await User.findById(req.userId)
+            .select("name email profileId")
+            .populate("profileId", "avatar displayName")
+            .lean();
 
         await Promise.all([
             User.findByIdAndUpdate(req.userId, {
@@ -163,6 +193,22 @@ export const acceptRequest = async (req, res) => {
             io.to(`user:${req.userId}`).emit("friends:updated", { userId: req.userId });
             io.to(`user:${requesterId}`).emit("friends:requests:update", { userId: requesterId });
             io.to(`user:${req.userId}`).emit("friends:requests:update", { userId: req.userId });
+
+            if (accepter) {
+                try {
+                    const notification = await Notification.create({
+                        userId: requesterId,
+                        type: "friend",
+                        meta: {
+                            action: "accepted",
+                            requesterId: req.userId,
+                            requesterName: accepter?.profileId?.displayName || accepter?.name || "Member",
+                            requesterAvatar: accepter?.profileId?.avatar || "",
+                        },
+                    });
+                    io.to(`user:${requesterId}`).emit("new_notification", notification);
+                } catch { }
+            }
         } catch { }
     } catch (error) {
         console.log("Error in acceptRequest:", error);
@@ -192,6 +238,9 @@ export const declineRequest = async (req, res) => {
             const { io } = await import("../socket.js");
             io.to(`user:${requesterId}`).emit("friends:requests:update", { userId: requesterId });
             io.to(`user:${req.userId}`).emit("friends:requests:update", { userId: req.userId });
+            io.to(`user:${requesterId}`).emit("friends:request:declined", {
+                byUserId: req.userId,
+            });
         } catch { }
     } catch (error) {
         console.log("Error in declineRequest:", error);

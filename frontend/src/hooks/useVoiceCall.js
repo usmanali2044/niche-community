@@ -35,9 +35,14 @@ const useVoiceCall = (socket, user, profile) => {
     const [participants, setParticipants] = useState([]);
     const [remoteMedia, setRemoteMedia] = useState([]);
     const [remoteVideos, setRemoteVideos] = useState([]);
+    const [remoteScreenStreams, setRemoteScreenStreams] = useState([]);
+    const [remoteCameraStreams, setRemoteCameraStreams] = useState([]);
+    const [localScreenStream, setLocalScreenStream] = useState(null);
+    const [localCameraStream, setLocalCameraStream] = useState(null);
     const [isMuted, setIsMuted] = useState(false);
     const [isDeafened, setIsDeafened] = useState(false);
     const [isSharing, setIsSharing] = useState(false);
+    const [isCameraOn, setIsCameraOn] = useState(false);
     const [noiseReduction, setNoiseReduction] = useState(false);
     const [startTime, setStartTime] = useState(null);
     const [elapsed, setElapsed] = useState(0);
@@ -45,6 +50,8 @@ const useVoiceCall = (socket, user, profile) => {
     const localStreamRef = useRef(null);
     const rawStreamRef = useRef(null);
     const screenStreamRef = useRef(null);
+    const cameraStreamRef = useRef(null);
+    const screenSharersRef = useRef(new Set());
     const peersRef = useRef(new Map());
     const timersRef = useRef(null);
     const audioCtxRef = useRef(null);
@@ -127,6 +134,26 @@ const useVoiceCall = (socket, user, profile) => {
         });
     }, []);
 
+    const replaceVideoTrack = useCallback((track, stream) => {
+        peersRef.current.forEach((pc, socketId) => {
+            const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
+            if (sender) {
+                sender.replaceTrack(track);
+            } else if (track) {
+                pc.addTrack(track, stream);
+            }
+            try {
+                pc.createOffer().then((offer) => {
+                    pc.setLocalDescription(offer).then(() => {
+                        socket?.emit('voice:signal', { to: socketId, data: { type: 'offer', sdp: pc.localDescription } });
+                    });
+                });
+            } catch {
+                // ignore
+            }
+        });
+    }, [socket]);
+
     const refreshLocalAudioStream = useCallback((enabled) => {
         if (!rawStreamRef.current) return;
         localStreamRef.current = enabled ? buildProcessedStream(rawStreamRef.current) : rawStreamRef.current;
@@ -166,6 +193,8 @@ const useVoiceCall = (socket, user, profile) => {
     const removeRemoteStream = useCallback((socketId) => {
         setRemoteMedia((prev) => prev.filter((item) => item.socketId !== socketId));
         setRemoteVideos((prev) => prev.filter((item) => item.socketId !== socketId));
+        setRemoteScreenStreams((prev) => prev.filter((item) => item.socketId !== socketId));
+        setRemoteCameraStreams((prev) => prev.filter((item) => item.socketId !== socketId));
     }, []);
 
     const createPeerConnection = useCallback(
@@ -200,12 +229,26 @@ const useVoiceCall = (socket, user, profile) => {
             pc.ontrack = (event) => {
                 if (event.streams?.[0]) {
                     if (event.track.kind === 'video') {
-                        setRemoteVideos((prev) => {
-                            const filtered = prev.filter((item) => item.socketId !== socketId);
-                            return [...filtered, { socketId, stream: event.streams[0] }];
-                        });
+                        const isScreen = screenSharersRef.current.has(socketId);
+                        if (isScreen) {
+                            setRemoteScreenStreams((prev) => {
+                                const filtered = prev.filter((item) => item.socketId !== socketId);
+                                return [...filtered, { socketId, stream: event.streams[0] }];
+                            });
+                            setRemoteVideos((prev) => {
+                                const filtered = prev.filter((item) => item.socketId !== socketId);
+                                return [...filtered, { socketId, stream: event.streams[0] }];
+                            });
+                        } else {
+                            setRemoteCameraStreams((prev) => {
+                                const filtered = prev.filter((item) => item.socketId !== socketId);
+                                return [...filtered, { socketId, stream: event.streams[0] }];
+                            });
+                        }
                         event.track.onended = () => {
                             setRemoteVideos((prev) => prev.filter((item) => item.socketId !== socketId));
+                            setRemoteScreenStreams((prev) => prev.filter((item) => item.socketId !== socketId));
+                            setRemoteCameraStreams((prev) => prev.filter((item) => item.socketId !== socketId));
                         };
                     } else {
                         attachRemoteStream(socketId, event.streams[0]);
@@ -276,17 +319,19 @@ const useVoiceCall = (socket, user, profile) => {
             setStartTime(Date.now());
             const localUser = buildLocalUser(user, profile);
             setParticipants([{ socketId: 'local', ...localUser, isLocal: true }]);
-            socket.emit('voice:join', { channelId: channel._id, user: localUser });
+            socket.emit('voice:join', { channelId: channel._id, communityId: channel.communityId, user: localUser });
             playTone(760, 0.09, 'sine', 0.04);
         },
         [socket, user, profile, activeVoiceChannel, isMuted, playTone, buildProcessedStream, noiseReduction, ensureAudioConstraints]
     );
 
     const leaveVoice = useCallback(() => {
-        if (!socket) return;
-        socket.emit('voice:leave');
+        if (socket) {
+            socket.emit('voice:leave');
+        }
         peersRef.current.forEach((_, key) => closePeerConnection(key));
         peersRef.current.clear();
+        screenSharersRef.current.clear();
         if (rawStreamRef.current) {
             rawStreamRef.current.getTracks().forEach((track) => track.stop());
             rawStreamRef.current = null;
@@ -296,11 +341,21 @@ const useVoiceCall = (socket, user, profile) => {
             screenStreamRef.current.getTracks().forEach((track) => track.stop());
             screenStreamRef.current = null;
         }
+        setLocalScreenStream(null);
+        if (cameraStreamRef.current) {
+            cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+            cameraStreamRef.current = null;
+        }
+        setLocalCameraStream(null);
+        setIsCameraOn(false);
         setParticipants([]);
         setRemoteMedia([]);
         setRemoteVideos([]);
+        setRemoteScreenStreams([]);
+        setRemoteCameraStreams([]);
         setActiveVoiceChannel(null);
         setStartTime(null);
+        setIsSharing(false);
         playTone(240, 0.12, 'sine', 0.05);
     }, [socket, closePeerConnection]);
 
@@ -308,30 +363,53 @@ const useVoiceCall = (socket, user, profile) => {
         if (!screenStreamRef.current) return;
         screenStreamRef.current.getTracks().forEach((track) => track.stop());
         screenStreamRef.current = null;
+        setLocalScreenStream(null);
         setIsSharing(false);
-        setRemoteVideos([]);
         if (activeVoiceChannel?._id) {
             socket?.emit('voice:share-stop', { channelId: activeVoiceChannel._id });
         }
-        peersRef.current.forEach((pc, socketId) => {
-            const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
-            if (sender) {
-                sender.replaceTrack(null);
-            }
-            try {
-                pc.createOffer().then((offer) => {
-                    pc.setLocalDescription(offer).then(() => {
-                        socket?.emit('voice:signal', { to: socketId, data: { type: 'offer', sdp: pc.localDescription } });
-                    });
-                });
-            } catch {
-                // ignore
-            }
-        });
-    }, [socket, activeVoiceChannel?._id]);
+        replaceVideoTrack(null);
+    }, [socket, activeVoiceChannel?._id, replaceVideoTrack]);
+
+    const stopCamera = useCallback(() => {
+        if (!cameraStreamRef.current) return;
+        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+        cameraStreamRef.current = null;
+        setLocalCameraStream(null);
+        setIsCameraOn(false);
+        if (activeVoiceChannel?._id) {
+            socket?.emit('voice:camera-stop', { channelId: activeVoiceChannel._id });
+        }
+        replaceVideoTrack(null);
+    }, [replaceVideoTrack, socket, activeVoiceChannel?._id]);
+
+    const startCamera = useCallback(async () => {
+        if (!activeVoiceChannel || !socket) return;
+        if (cameraStreamRef.current) return;
+        if (screenStreamRef.current) {
+            stopScreenShare();
+        }
+        try {
+            const camStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            const [track] = camStream.getVideoTracks();
+            if (!track) return;
+            cameraStreamRef.current = camStream;
+            setLocalCameraStream(camStream);
+            setIsCameraOn(true);
+            replaceVideoTrack(track, camStream);
+            track.onended = () => {
+                stopCamera();
+            };
+        } catch (err) {
+            console.error('Camera access failed', err);
+        }
+    }, [activeVoiceChannel, socket, replaceVideoTrack, stopScreenShare, stopCamera]);
 
     const startScreenShare = useCallback(async () => {
         if (!activeVoiceChannel || !socket) return;
+        if (cameraStreamRef.current) {
+            stopCamera();
+        }
         try {
             if (!navigator.mediaDevices?.getDisplayMedia) {
                 console.error('Screen share not supported in this browser');
@@ -353,25 +431,11 @@ const useVoiceCall = (socket, user, profile) => {
             const [track] = screenStream.getVideoTracks();
             if (!track) return;
             screenStreamRef.current = screenStream;
+            setLocalScreenStream(screenStream);
             setIsSharing(true);
+            socket.emit('voice:share-start', { channelId: activeVoiceChannel._id });
 
-            peersRef.current.forEach((pc, socketId) => {
-                const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
-                if (sender) {
-                    sender.replaceTrack(track);
-                } else {
-                    pc.addTrack(track, screenStream);
-                }
-                try {
-                    pc.createOffer().then((offer) => {
-                        pc.setLocalDescription(offer).then(() => {
-                            socket.emit('voice:signal', { to: socketId, data: { type: 'offer', sdp: pc.localDescription } });
-                        });
-                    });
-                } catch {
-                    // ignore
-                }
-            });
+            replaceVideoTrack(track, screenStream);
 
             track.onended = () => {
                 stopScreenShare();
@@ -380,7 +444,7 @@ const useVoiceCall = (socket, user, profile) => {
             console.error('Screen share failed', err);
             setIsSharing(false);
         }
-    }, [activeVoiceChannel, socket, stopScreenShare, buildProcessedStream, noiseReduction, ensureAudioConstraints]);
+    }, [activeVoiceChannel, socket, stopScreenShare, buildProcessedStream, noiseReduction, ensureAudioConstraints, replaceVideoTrack, stopCamera]);
 
     const toggleMute = useCallback(() => {
         setIsMuted((prev) => {
@@ -415,8 +479,10 @@ const useVoiceCall = (socket, user, profile) => {
         const ids = new Set();
         remoteMedia.forEach((item) => ids.add(item.socketId));
         remoteVideos.forEach((item) => ids.add(item.socketId));
+        remoteScreenStreams.forEach((item) => ids.add(item.socketId));
+        remoteCameraStreams.forEach((item) => ids.add(item.socketId));
         return Array.from(ids);
-    }, [remoteMedia, remoteVideos]);
+    }, [remoteMedia, remoteVideos, remoteScreenStreams, remoteCameraStreams]);
 
     useEffect(() => {
         if (!socket) return;
@@ -463,8 +529,12 @@ const useVoiceCall = (socket, user, profile) => {
             }
         };
 
-        const handleMembers = ({ members }) => {
+        const handleMembers = ({ channelId, members }) => {
             if (!Array.isArray(members)) return;
+            if (!activeVoiceChannel?._id) return;
+            const channelKey = channelId?.toString?.() || String(channelId);
+            const activeKey = activeVoiceChannel?._id?.toString?.() || String(activeVoiceChannel?._id);
+            if (channelKey !== activeKey) return;
             const localUser = buildLocalUser(user, profile);
             const localId = socket?.id;
             const next = members.map((m) => ({
@@ -484,9 +554,34 @@ const useVoiceCall = (socket, user, profile) => {
             });
         };
 
+        const handleShareStarted = ({ socketId }) => {
+            if (!socketId) return;
+            screenSharersRef.current.add(socketId);
+            setRemoteCameraStreams((prev) => {
+                const existing = prev.find((item) => item.socketId === socketId);
+                if (!existing) return prev;
+                setRemoteScreenStreams((screenPrev) => {
+                    const filtered = screenPrev.filter((item) => item.socketId !== socketId);
+                    return [...filtered, existing];
+                });
+                setRemoteVideos((videoPrev) => {
+                    const filtered = videoPrev.filter((item) => item.socketId !== socketId);
+                    return [...filtered, existing];
+                });
+                return prev.filter((item) => item.socketId !== socketId);
+            });
+        };
+
         const handleShareStopped = ({ socketId }) => {
             if (!socketId) return;
+            screenSharersRef.current.delete(socketId);
             setRemoteVideos((prev) => prev.filter((item) => item.socketId !== socketId));
+            setRemoteScreenStreams((prev) => prev.filter((item) => item.socketId !== socketId));
+        };
+
+        const handleCameraStopped = ({ socketId }) => {
+            if (!socketId) return;
+            setRemoteCameraStreams((prev) => prev.filter((item) => item.socketId !== socketId));
         };
 
         socket.on('voice:peers', handlePeers);
@@ -494,7 +589,9 @@ const useVoiceCall = (socket, user, profile) => {
         socket.on('voice:peer-left', handlePeerLeft);
         socket.on('voice:signal', handleSignal);
         socket.on('voice:members', handleMembers);
+        socket.on('voice:share-started', handleShareStarted);
         socket.on('voice:share-stopped', handleShareStopped);
+        socket.on('voice:camera-stopped', handleCameraStopped);
 
         return () => {
             socket.off('voice:peers', handlePeers);
@@ -502,14 +599,17 @@ const useVoiceCall = (socket, user, profile) => {
             socket.off('voice:peer-left', handlePeerLeft);
             socket.off('voice:signal', handleSignal);
             socket.off('voice:members', handleMembers);
+            socket.off('voice:share-started', handleShareStarted);
             socket.off('voice:share-stopped', handleShareStopped);
+            socket.off('voice:camera-stopped', handleCameraStopped);
         };
-    }, [socket, user, profile, createPeerConnection, closePeerConnection]);
+    }, [socket, user, profile, createPeerConnection, closePeerConnection, activeVoiceChannel?._id]);
 
     useEffect(() => {
         return () => {
             peersRef.current.forEach((_, key) => closePeerConnection(key));
             peersRef.current.clear();
+            screenSharersRef.current.clear();
             if (rawStreamRef.current) {
                 rawStreamRef.current.getTracks().forEach((track) => track.stop());
                 rawStreamRef.current = null;
@@ -519,6 +619,13 @@ const useVoiceCall = (socket, user, profile) => {
                 screenStreamRef.current.getTracks().forEach((track) => track.stop());
                 screenStreamRef.current = null;
             }
+            setLocalScreenStream(null);
+            if (cameraStreamRef.current) {
+                cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+                cameraStreamRef.current = null;
+            }
+            setLocalCameraStream(null);
+            setIsCameraOn(false);
         };
     }, [closePeerConnection]);
 
@@ -527,9 +634,14 @@ const useVoiceCall = (socket, user, profile) => {
         participants,
         remoteMedia,
         remoteVideos,
+        remoteScreenStreams,
+        remoteCameraStreams,
+        localScreenStream,
+        localCameraStream,
         isMuted,
         isDeafened,
         isSharing,
+        isCameraOn,
         noiseReduction,
         connectedPeerIds,
         elapsed,
@@ -538,6 +650,8 @@ const useVoiceCall = (socket, user, profile) => {
         toggleMute,
         toggleDeafen,
         toggleNoiseReduction,
+        startCamera,
+        stopCamera,
         startScreenShare,
         stopScreenShare,
     };
