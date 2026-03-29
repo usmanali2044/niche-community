@@ -1208,13 +1208,22 @@ export const updateCommunityProfile = async (req, res) => {
             return res.status(403).json({ success: false, message: "Community ID mismatch" });
         }
 
-        if (req.communityRole !== 'admin') {
-            return res.status(403).json({ success: false, message: "Only community admins can update the server profile" });
-        }
-
         const community = await Community.findById(id);
         if (!community) {
             return res.status(404).json({ success: false, message: "Community not found" });
+        }
+
+        let canEditProfile = ['admin', 'moderator'].includes(req.communityRole);
+        if (!canEditProfile) {
+            const roleIds = req.communityMembership?.roles || [];
+            if (roleIds.length > 0) {
+                const roleMap = new Map((community.roles || []).map((r) => [r._id.toString(), r.permissions || {}]));
+                canEditProfile = roleIds.some((rid) => roleMap.get(rid.toString())?.editServerProfile);
+            }
+        }
+
+        if (!canEditProfile) {
+            return res.status(403).json({ success: false, message: "You do not have permission to update the server profile" });
         }
 
         if (name !== undefined) {

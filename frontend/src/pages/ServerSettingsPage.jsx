@@ -94,6 +94,11 @@ const rolePermissionOptions = [
         label: 'Audit Logs',
         description: 'View moderation actions and audit trails.',
     },
+    {
+        key: 'editServerProfile',
+        label: 'Edit Server Profile',
+        description: 'Allows members to update the server profile details.',
+    },
 ];
 
 const moderationItems = [
@@ -204,6 +209,7 @@ const ServerSettingsPage = () => {
         warnMembers: false,
         suspendMembers: false,
         viewAuditLog: false,
+        editServerProfile: false,
     });
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [assignMember, setAssignMember] = useState(null);
@@ -258,6 +264,7 @@ const ServerSettingsPage = () => {
         || currentRolePermissions.warnMembers
         || currentRolePermissions.suspendMembers
         || currentRolePermissions.viewAuditLog;
+    const canEditServerProfile = ['admin', 'moderator'].includes(membership?.role) || currentRolePermissions.editServerProfile;
     const canManageRoles = ['admin', 'moderator'].includes(membership?.role) || currentRolePermissions.manageRoles;
     const canModerate = ['admin', 'moderator'].includes(membership?.role) || currentRolePermissions.moderateContent || currentRolePermissions.warnMembers || currentRolePermissions.suspendMembers || currentRolePermissions.banMembers || currentRolePermissions.viewAuditLog;
     const canViewAuditLog = ['admin', 'moderator'].includes(membership?.role) || currentRolePermissions.viewAuditLog;
@@ -479,6 +486,7 @@ const ServerSettingsPage = () => {
         warnMembers: false,
         suspendMembers: false,
         viewAuditLog: false,
+        editServerProfile: false,
     });
 
     const applyModeratorPreset = (perms) => {
@@ -870,13 +878,44 @@ const ServerSettingsPage = () => {
     const previewBanner = bannerColor || bannerOptions[0].value;
     const previewTraits = traits.length > 0 ? traits : ['Community', 'Chat', 'Events'];
     const isRestricted = useMemo(() => {
-        if (activeSettingsTab === 'profile') return !canManage;
+        if (activeSettingsTab === 'profile') return !canEditServerProfile;
         if (activeSettingsTab === 'members') return !canManage;
         if (activeSettingsTab === 'invites') return !canReviewInvites;
         if (activeSettingsTab === 'roles') return !canManageRoles;
         if (activeSettingsTab === 'moderation') return !canModerate;
         return false;
-    }, [activeSettingsTab, canManage, canManageRoles, canReviewInvites, canModerate]);
+    }, [activeSettingsTab, canEditServerProfile, canManage, canManageRoles, canReviewInvites, canModerate]);
+
+    const firstAllowedTab = useMemo(() => {
+        if (canEditServerProfile) return 'profile';
+        if (canManage) return 'members';
+        if (canReviewInvites) return 'invites';
+        if (canManageRoles) return 'roles';
+        if (canModerateTab) return 'moderation';
+        return 'profile';
+    }, [canEditServerProfile, canManage, canReviewInvites, canManageRoles, canModerateTab]);
+
+    useEffect(() => {
+        if (activeSettingsTab === 'profile' && !canEditServerProfile) {
+            setActiveSettingsTab(firstAllowedTab);
+            return;
+        }
+        if (activeSettingsTab === 'members' && !canManage) {
+            setActiveSettingsTab(firstAllowedTab);
+            return;
+        }
+        if (activeSettingsTab === 'invites' && !canReviewInvites) {
+            setActiveSettingsTab(firstAllowedTab);
+            return;
+        }
+        if (activeSettingsTab === 'roles' && !canManageRoles) {
+            setActiveSettingsTab(firstAllowedTab);
+            return;
+        }
+        if (activeSettingsTab === 'moderation' && !canModerateTab) {
+            setActiveSettingsTab(firstAllowedTab);
+        }
+    }, [activeSettingsTab, canEditServerProfile, canManage, canReviewInvites, canManageRoles, canModerateTab, firstAllowedTab]);
 
     return (
         <>
@@ -887,16 +926,18 @@ const ServerSettingsPage = () => {
                         <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-discord-faint mb-3">
                             {communityProfile?.name || 'Server'}
                         </div>
-                        <button
-                            onClick={() => setActiveSettingsTab('profile')}
-                            className={`w-full text-left px-3 py-2 rounded-md text-sm font-semibold ${
-                                activeSettingsTab === 'profile'
-                                    ? 'bg-discord-border-light/30 text-discord-white'
-                                    : 'text-discord-faint hover:bg-discord-border-light/20'
-                            }`}
-                        >
-                            Server Profile
-                        </button>
+                        {canEditServerProfile && (
+                            <button
+                                onClick={() => setActiveSettingsTab('profile')}
+                                className={`w-full text-left px-3 py-2 rounded-md text-sm font-semibold ${
+                                    activeSettingsTab === 'profile'
+                                        ? 'bg-discord-border-light/30 text-discord-white'
+                                        : 'text-discord-faint hover:bg-discord-border-light/20'
+                                }`}
+                            >
+                                Server Profile
+                            </button>
+                        )}
                         {canManage && (
                             <button
                                 onClick={() => setActiveSettingsTab('members')}
@@ -987,16 +1028,18 @@ const ServerSettingsPage = () => {
                                     </button>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
-                                    <button
-                                        onClick={() => setActiveSettingsTab('profile')}
-                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
-                                            activeSettingsTab === 'profile'
-                                                ? 'bg-discord-border-light/30 text-discord-white'
-                                                : 'text-discord-faint hover:bg-discord-border-light/20'
-                                        }`}
-                                    >
-                                        Profile
-                                    </button>
+                                    {canEditServerProfile && (
+                                        <button
+                                            onClick={() => setActiveSettingsTab('profile')}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+                                                activeSettingsTab === 'profile'
+                                                    ? 'bg-discord-border-light/30 text-discord-white'
+                                                    : 'text-discord-faint hover:bg-discord-border-light/20'
+                                            }`}
+                                        >
+                                            Profile
+                                        </button>
+                                    )}
                                     {canManage && (
                                         <button
                                             onClick={() => setActiveSettingsTab('members')}
@@ -1074,7 +1117,7 @@ const ServerSettingsPage = () => {
                                     <button
                                         className="px-4 py-2 rounded-md bg-discord-border-light/30 text-sm font-semibold hover:bg-discord-border-light/50 transition disabled:opacity-50"
                                         onClick={handleSave}
-                                        disabled={!canManage || isSaving}
+                                        disabled={!canEditServerProfile || isSaving}
                                     >
                                         <Save className="w-4 h-4 inline mr-2" />
                                         {isSaving ? 'Saving...' : 'Save Changes'}

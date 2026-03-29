@@ -24,6 +24,7 @@ const roleSchema = new mongoose.Schema({
     warnMembers: { type: Boolean, default: false },
     suspendMembers: { type: Boolean, default: false },
     viewAuditLog: { type: Boolean, default: false },
+    editServerProfile: { type: Boolean, default: false },
   },
   createdAt: { type: Date, default: Date.now },
 }, { _id: true });

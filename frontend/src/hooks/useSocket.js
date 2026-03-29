@@ -92,6 +92,19 @@ const useSocket = (userId, communityId) => {
         };
         newSocket.on('community:member_added', handleMemberAdded);
 
+        const handleKicked = ({ communityId }) => {
+            if (!communityId) return;
+            const { user, setUser } = useAuthStore.getState();
+            if (!user) return;
+            const nextMemberships = (user.memberships || []).filter((m) => {
+                const id = m.communityId?._id || m.communityId;
+                return (id?.toString?.() || String(id)) !== (communityId?.toString?.() || String(communityId));
+            });
+            if (nextMemberships.length === (user.memberships || []).length) return;
+            setUser({ ...user, memberships: nextMemberships });
+        };
+        newSocket.on('community:kicked', handleKicked);
+
         setSocket(newSocket);
 
         // Cleanup on unmount
@@ -99,6 +112,7 @@ const useSocket = (userId, communityId) => {
             newSocket.off('community:role_updated', handleRoleUpdate);
             newSocket.off('new_notification', handleNotification);
             newSocket.off('community:member_added', handleMemberAdded);
+            newSocket.off('community:kicked', handleKicked);
             newSocket.disconnect();
             setSocket(null);
         };

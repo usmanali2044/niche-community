@@ -384,6 +384,33 @@ const FeedPage = () => {
                 setViewMode('dm');
             }
         };
+        const handleCommunityMemberJoined = ({ communityId }) => {
+            if (!communityId) return;
+            const current = activeCommunityId?.toString?.() || String(activeCommunityId || '');
+            const incoming = communityId?.toString?.() || String(communityId);
+            if (current && current === incoming) {
+                fetchRoster();
+            }
+        };
+        const handleCommunityMemberKicked = ({ communityId }) => {
+            if (!communityId) return;
+            const current = activeCommunityId?.toString?.() || String(activeCommunityId || '');
+            const incoming = communityId?.toString?.() || String(communityId);
+            if (current && current === incoming) {
+                fetchRoster();
+            }
+        };
+        const handleCommunityKicked = ({ communityId }) => {
+            if (!communityId) return;
+            const current = activeCommunityId?.toString?.() || String(activeCommunityId || '');
+            const incoming = communityId?.toString?.() || String(communityId);
+            if (current && current === incoming) {
+                clearChannels();
+                setActiveChannel(null);
+                setActiveCommunity(null);
+                setViewMode('friends');
+            }
+        };
         const handleRequestDeclined = ({ byUserId }) => {
             if (byUserId) {
                 removeOutgoing(byUserId);
@@ -498,6 +525,9 @@ const FeedPage = () => {
         socket.on('dm:thread:removed', handleThreadRemoved);
         socket.on('new_notification', handleNotification);
         socket.on('friends:request:declined', handleRequestDeclined);
+        socket.on('community:member_joined', handleCommunityMemberJoined);
+        socket.on('community:member_kicked', handleCommunityMemberKicked);
+        socket.on('community:kicked', handleCommunityKicked);
         socket.on('dm:call:incoming', handleIncomingCall);
         socket.on('dm:call:accepted', handleCallAccepted);
         socket.on('dm:call:declined', handleCallDeclined);
@@ -521,6 +551,9 @@ const FeedPage = () => {
         socket.off('dm:thread:removed', handleThreadRemoved);
         socket.off('new_notification', handleNotification);
         socket.off('friends:request:declined', handleRequestDeclined);
+        socket.off('community:member_joined', handleCommunityMemberJoined);
+        socket.off('community:member_kicked', handleCommunityMemberKicked);
+        socket.off('community:kicked', handleCommunityKicked);
         socket.off('dm:call:incoming', handleIncomingCall);
         socket.off('dm:call:accepted', handleCallAccepted);
         socket.off('dm:call:declined', handleCallDeclined);
@@ -553,6 +586,12 @@ const FeedPage = () => {
         activeDmCall,
         outgoingCall,
         incomingCall,
+        activeCommunityId,
+        fetchRoster,
+        clearChannels,
+        setActiveChannel,
+        setActiveCommunity,
+        setViewMode,
         joinVoice,
         leaveVoice,
         stopScreenShare,
