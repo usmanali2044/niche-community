@@ -995,9 +995,9 @@ const HomePage = () => {
             {/* ═══════════  FOOTER  ═══════════ */}
             <footer ref={footerRef} className="relative bg-discord-darkest border-t border-white/[0.06] pt-12 pb-6">
                 <div className="max-w-6xl mx-auto px-5 sm:px-8">
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-10">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-10 mb-10">
                         {/* Brand Column */}
-                        <div className="col-span-2 md:col-span-1">
+                        <div className="col-span-1">
                             <div className="flex items-center gap-2.5 mb-4">
                                 <div className="w-8 h-8 rounded-full bg-blurple flex items-center justify-center">
                                     <Sparkles className="w-4 h-4 text-white" strokeWidth={2.5} />
