@@ -14,9 +14,7 @@ import {
     ShieldCheck,
     MessageSquare,
     Rocket,
-    BookOpen,
     LifeBuoy,
-    FileText,
     Briefcase,
     Building2,
     Hash,
@@ -446,10 +444,10 @@ const HomePage = () => {
         {
             heading: 'Resources',
             links: [
-                { label: 'Documentation', icon: BookOpen },
-                { label: 'API Status', icon: Zap },
-                { label: 'Support', icon: LifeBuoy },
-                { label: 'Changelog', icon: FileText },
+                { label: 'Documentation' },
+                { label: 'API Status' },
+                { label: 'Support' },
+                { label: 'Changelog' },
             ],
         },
         {
