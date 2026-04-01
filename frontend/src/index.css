@@ -126,6 +126,18 @@ body {
   }
 }
 
+@keyframes popInFast {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @keyframes float {
 
   0%,
@@ -421,6 +433,14 @@ body {
 
 @utility animate-scale-in {
   animation: scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@utility animate-fade-in-fast {
+  animation: fadeIn 0.2s ease-out both;
+}
+
+@utility animate-pop-in-fast {
+  animation: popInFast 0.22s cubic-bezier(0.2, 0.9, 0.2, 1) both;
 }
 
 @utility animate-float {

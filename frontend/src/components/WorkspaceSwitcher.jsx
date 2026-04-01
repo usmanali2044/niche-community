@@ -32,6 +32,7 @@ const WorkspaceSwitcher = ({ onHomeClick, onServerSelect, openDirectorySignal = 
     const [hoveredServer, setHoveredServer] = useState(null);
     const [showDirectory, setShowDirectory] = useState(false);
     const [directoryQuery, setDirectoryQuery] = useState('');
+    const [directoryCategory, setDirectoryCategory] = useState('all');
     const [requestTarget, setRequestTarget] = useState(null);
     const [requestNote, setRequestNote] = useState('');
     const [requestSuccess, setRequestSuccess] = useState('');
@@ -92,16 +93,43 @@ const WorkspaceSwitcher = ({ onHomeClick, onServerSelect, openDirectorySignal = 
         return community?._id || community;
     };
 
+    const directoryCategories = useMemo(() => ([
+        { key: 'all', label: 'All' },
+        { key: 'gaming', label: 'Gaming' },
+        { key: 'friends', label: 'Friends' },
+        { key: 'study', label: 'Study Group' },
+        { key: 'school', label: 'School Club' },
+    ]), []);
+
+    const categoryLabels = useMemo(() => ({
+        gaming: 'Gaming',
+        friends: 'Friends',
+        study: 'Study Group',
+        school: 'School Club',
+    }), []);
+
+    const getCommunityCategory = (community) => {
+        const template = (community?.template || '').toLowerCase();
+        if (categoryLabels[template]) return template;
+        const kind = (community?.kind || '').toLowerCase();
+        if (kind === 'friends') return 'friends';
+        return '';
+    };
+
     const filteredCommunities = useMemo(() => {
         const q = directoryQuery.trim().toLowerCase();
         const list = allCommunities || [];
-        if (!q) return list;
         return list.filter((c) => {
+            const category = getCommunityCategory(c);
+            if (directoryCategory !== 'all' && category !== directoryCategory) return false;
+            if (!q) return true;
             const name = (c.name || '').toLowerCase();
             const slug = (c.slug || '').toLowerCase();
-            return name.includes(q) || slug.includes(q);
+            const description = (c.description || '').toLowerCase();
+            const traits = Array.isArray(c.traits) ? c.traits.join(' ').toLowerCase() : '';
+            return name.includes(q) || slug.includes(q) || description.includes(q) || traits.includes(q);
         });
-    }, [allCommunities, directoryQuery]);
+    }, [allCommunities, directoryQuery, directoryCategory]);
 
     useEffect(() => {
         if (!showDirectory) return;
@@ -274,9 +302,9 @@ const WorkspaceSwitcher = ({ onHomeClick, onServerSelect, openDirectorySignal = 
             </aside>
 
             {showCreateModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in-fast" onClick={() => setShowCreateModal(false)}>
                     <div
-                        className={`max-w-[96vw] rounded-2xl bg-[#2b2d31] border border-discord-border/50 shadow-2xl ${
+                        className={`max-w-[96vw] rounded-2xl bg-[#2b2d31] border border-discord-border/50 shadow-2xl animate-pop-in-fast ${
                             step === 'template' ? 'w-[920px]' : 'w-[460px]'
                         }`}
                         onClick={(e) => e.stopPropagation()}
@@ -544,9 +572,9 @@ const WorkspaceSwitcher = ({ onHomeClick, onServerSelect, openDirectorySignal = 
             )}
 
             {showDirectory && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowDirectory(false)}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in-fast" onClick={() => setShowDirectory(false)}>
                     <div
-                        className="w-full h-full md:w-[980px] md:max-w-[96vw] md:max-h-[90vh] overflow-y-auto md:rounded-2xl rounded-none bg-gradient-to-b from-[#2b2f45] via-[#26283b] to-[#1f2232] border border-discord-border/40 shadow-2xl p-4 md:p-6"
+                        className="w-full h-full md:w-[980px] md:max-w-[96vw] md:max-h-[90vh] overflow-y-auto md:rounded-2xl rounded-none bg-gradient-to-b from-[#2b2f45] via-[#26283b] to-[#1f2232] border border-discord-border/40 shadow-2xl p-4 md:p-6 animate-pop-in-fast"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="rounded-2xl overflow-hidden border border-white/10 shadow-[0_16px_32px_rgba(18,20,40,0.3)] mb-5">
@@ -746,6 +774,25 @@ const WorkspaceSwitcher = ({ onHomeClick, onServerSelect, openDirectorySignal = 
                             </button>
                         </div>
 
+                        <div className="mt-4 flex flex-wrap gap-2">
+                            {directoryCategories.map((category) => {
+                                const isActive = directoryCategory === category.key;
+                                return (
+                                    <button
+                                        key={category.key}
+                                        onClick={() => setDirectoryCategory(category.key)}
+                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                                            isActive
+                                                ? 'bg-blurple text-white border-blurple/60'
+                                                : 'bg-discord-darkest/70 text-discord-faint border-discord-border/50 hover:bg-discord-border-light/30'
+                                        }`}
+                                    >
+                                        {category.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
                         <div className="mt-6">
                             <div className="text-sm font-semibold text-discord-light mb-3">
                                 Servers ({filteredCommunities.length})
@@ -759,6 +806,8 @@ const WorkspaceSwitcher = ({ onHomeClick, onServerSelect, openDirectorySignal = 
                                         const name = community?.name || 'Community';
                                         const icon = community?.icon || '';
                                         const description = community?.description || community?.profileDescription || community?.slug || 'Community';
+                                        const categoryKey = getCommunityCategory(community);
+                                        const categoryLabel = categoryLabels[categoryKey];
                                         const isMember = membershipIds.has(id?.toString?.() || String(id));
                                         const isRequested = requestedIds.includes(id?.toString?.() || String(id));
                                         return (
@@ -793,8 +842,17 @@ const WorkspaceSwitcher = ({ onHomeClick, onServerSelect, openDirectorySignal = 
                                                     {description && (
                                                         <p className="text-xs text-discord-faint mt-1">{description}</p>
                                                     )}
-                                                    {typeof community?.membersCount === 'number' && (
-                                                        <p className="text-[11px] text-discord-faint mt-2">{community.membersCount} members</p>
+                                                    {(typeof community?.membersCount === 'number' || categoryLabel) && (
+                                                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                                                            {typeof community?.membersCount === 'number' && (
+                                                                <span className="text-[11px] text-discord-faint">{community.membersCount} members</span>
+                                                            )}
+                                                            {categoryLabel && (
+                                                                <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-white/5 text-discord-light border border-white/10">
+                                                                    {categoryLabel}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     )}
                                                     {!isMember && (
                                                         <div className="mt-3">

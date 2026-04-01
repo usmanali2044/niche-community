@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Phone, Smile, Send, Plus, Image as ImageIcon, X, Menu, Server, Mic, ScreenShare, Video, VideoOff, UserPlus, LogOut } from 'lucide-react';
+import { Phone, Smile, Send, Plus, Image as ImageIcon, X, Menu, Server, Mic, MicOff, ScreenShare, Video, VideoOff, UserPlus, LogOut } from 'lucide-react';
 import VoiceVideoPlayer from './VoiceVideoPlayer';
 import EmojiPicker from './EmojiPicker';
 
@@ -27,6 +27,9 @@ const DmPanel = ({
     onOpenSidebar,
     onOpenServers,
     onCall,
+    onJoinCall,
+    onJoinWithVideo,
+    onOpenInvite,
     onAddToGroup,
     onLeaveGroup,
     canAddToGroup = false,
@@ -49,6 +52,7 @@ const DmPanel = ({
     screenShareOwnerName,
     isRemoteScreenShare = false,
     onOpenStreamFullscreen,
+    callStatus,
 }) => {
     const headerTitle = activeDm?.displayName || 'Direct Messages';
     const username = activeDm?.subtitle || activeDm?.username || '';
@@ -91,9 +95,10 @@ const DmPanel = ({
                 displayName: p.displayName || 'Member',
                 avatar: p.avatar || '',
                 stream,
+                isMuted: isLocal ? isMuted : !!p.isMuted,
             };
         });
-    }, [participants, fallbackParticipants, localCameraStream, cameraStreamMap]);
+    }, [participants, fallbackParticipants, localCameraStream, cameraStreamMap, isMuted]);
     const shareTiles = useMemo(() => {
         if (Array.isArray(screenShareStreams) && screenShareStreams.length > 0) {
             return screenShareStreams;
@@ -108,6 +113,16 @@ const DmPanel = ({
         }
         return [];
     }, [screenShareStreams, screenShareStream, isRemoteScreenShare]);
+    const callRoster = useMemo(() => (
+        participantTiles.map((p) => ({
+            id: p.id,
+            displayName: p.displayName || 'Member',
+            avatar: p.avatar || '',
+            isMuted: !!p.isMuted,
+            isLocal: !!p.isLocal,
+        }))
+    ), [participantTiles]);
+    const showCallRoster = callRoster.length >= 3;
     const participantGridClass = participantTiles.length <= 2
         ? 'grid-cols-2'
         : participantTiles.length === 3
@@ -118,6 +133,7 @@ const DmPanel = ({
         : shareTiles.length === 2
             ? 'grid-cols-1 sm:grid-cols-2'
             : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
+    const isCrowded = participantTiles.length > 6;
     const participantMap = useMemo(() => {
         const map = new Map();
         (activeDm?.participants || []).forEach((p) => {
@@ -188,10 +204,10 @@ const DmPanel = ({
                             </button>
                         )}
                         <button
-                            onClick={() => onCall?.()}
+                            onClick={() => (callStatus?.isActive ? onJoinCall?.() : onCall?.())}
                             disabled={callDisabled}
                             className="w-8 h-8 rounded-md bg-discord-darkest/70 flex items-center justify-center text-discord-faint hover:text-white disabled:opacity-50"
-                            title="Call"
+                            title={callStatus?.isActive ? 'Join call' : 'Call'}
                         >
                             <Phone className="w-4 h-4" />
                         </button>
@@ -200,6 +216,48 @@ const DmPanel = ({
             )}
 
             <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-6">
+                {!activeCall && callStatus?.isActive && !callStatus?.isInCall && (
+                    <div className="mb-6 flex items-center justify-center">
+                        <div className="w-full max-w-[520px] rounded-3xl border border-emerald-500/25 bg-[#0f1d18] p-6 text-center shadow-[0_18px_40px_rgba(0,0,0,0.35)]">
+                            <div className="relative mx-auto h-24 w-24 rounded-full bg-discord-darkest flex items-center justify-center text-3xl font-bold text-white overflow-hidden ring-2 ring-emerald-500/40">
+                                {callStatus?.members?.[0]?.avatar ? (
+                                    <img src={callStatus.members[0].avatar} alt="" className="h-full w-full object-cover" />
+                                ) : (
+                                    (headerTitle || 'C').charAt(0).toUpperCase()
+                                )}
+                            </div>
+                            {Array.isArray(callStatus?.members) && callStatus.members.length > 1 && (
+                                <div className="mt-3 flex items-center justify-center -space-x-2">
+                                    {callStatus.members.slice(0, 4).map((m) => (
+                                        <div
+                                            key={m.socketId || m.userId}
+                                            className="h-8 w-8 rounded-full border-2 border-[#0f1d18] bg-discord-darkest overflow-hidden flex items-center justify-center text-[10px] font-semibold text-white"
+                                        >
+                                            {m.avatar ? (
+                                                <img src={m.avatar} alt="" className="h-full w-full object-cover" />
+                                            ) : (
+                                                (m.displayName || 'M').charAt(0).toUpperCase()
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <p className="mt-4 text-xs uppercase tracking-[0.25em] text-emerald-200/70">Call Active</p>
+                            <p className="mt-2 text-lg font-semibold text-emerald-100">
+                                {callStatus.participantCount} {callStatus.participantCount === 1 ? 'person' : 'people'} in call
+                            </p>
+                            <div className="mt-5 flex items-center justify-center gap-3">
+                                <button
+                                    onClick={() => onJoinCall?.()}
+                                    className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+                                >
+                                    <Phone className="h-4 w-4" />
+                                    Join Call
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 {activeCall && (
                     <div className="dm-call rounded-2xl border border-discord-border/60 p-6 mb-8">
                         <div className="dm-call__orbs" aria-hidden="true">
@@ -229,28 +287,70 @@ const DmPanel = ({
                                 ))}
                             </div>
                         )}
-                        <div className={`dm-call__tiles grid gap-3 ${participantGridClass}`}>
-                            {participantTiles.map((tile) => (
-                                <button
-                                    key={tile.id}
-                                    type="button"
-                                    disabled={!tile.stream}
-                                    onClick={() => tile.stream && onOpenStreamFullscreen?.(tile.stream)}
-                                    className={`dm-call__tile rounded-xl border h-[190px] flex items-center justify-center overflow-hidden focus:outline-none
-                                        ${tile.isLocal ? 'border-emerald-400/40 focus:ring-2 focus:ring-emerald-300/60' : 'border-discord-border/60 focus:ring-2 focus:ring-blurple/70'}`}
-                                    title={tile.stream ? `Open ${tile.isLocal ? 'your' : tile.displayName}'s camera` : tile.displayName}
-                                >
-                                    {tile.stream ? (
-                                        <VoiceVideoPlayer stream={tile.stream} muted={tile.isLocal} className="w-full h-full object-cover" />
-                                    ) : tile.avatar ? (
-                                        <img src={tile.avatar} alt="" className="dm-call__avatar w-20 h-20 rounded-full object-cover" />
-                                    ) : (
-                                        <div className="dm-call__avatar w-20 h-20 rounded-full bg-discord-darkest flex items-center justify-center text-2xl font-bold text-white">
-                                            {tile.displayName?.charAt(0).toUpperCase()}
-                                        </div>
-                                    )}
-                                </button>
-                            ))}
+                        <div className={`flex ${showCallRoster ? 'flex-col lg:flex-row' : 'flex-col'} gap-4`}>
+                            <div className={`flex-1 ${isCrowded ? 'max-h-[420px] overflow-y-auto pr-1' : ''}`}>
+                                <div className={`dm-call__tiles grid gap-3 ${participantGridClass}`}>
+                                    {participantTiles.map((tile) => (
+                                        <button
+                                            key={tile.id}
+                                            type="button"
+                                            disabled={!tile.stream}
+                                            onClick={() => tile.stream && onOpenStreamFullscreen?.(tile.stream)}
+                                            className={`dm-call__tile relative rounded-xl border h-[190px] flex items-center justify-center overflow-hidden focus:outline-none
+                                                ${tile.isLocal ? 'border-emerald-400/40 focus:ring-2 focus:ring-emerald-300/60' : 'border-discord-border/60 focus:ring-2 focus:ring-blurple/70'}`}
+                                            title={tile.stream ? `Open ${tile.isLocal ? 'your' : tile.displayName}'s camera` : tile.displayName}
+                                        >
+                                            {tile.stream ? (
+                                                <VoiceVideoPlayer stream={tile.stream} muted={tile.isLocal} className="w-full h-full object-cover" />
+                                            ) : tile.avatar ? (
+                                                <img src={tile.avatar} alt="" className="dm-call__avatar w-20 h-20 rounded-full object-cover" />
+                                            ) : (
+                                                <div className="dm-call__avatar w-20 h-20 rounded-full bg-discord-darkest flex items-center justify-center text-2xl font-bold text-white">
+                                                    {tile.displayName?.charAt(0).toUpperCase()}
+                                                </div>
+                                            )}
+                                            {tile.isMuted && (
+                                                <span className="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-red-500/90 flex items-center justify-center shadow-lg ring-2 ring-black/30">
+                                                    <MicOff className="w-3.5 h-3.5 text-white" />
+                                                </span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            {showCallRoster && (
+                                <aside className="w-full lg:w-64 rounded-xl border border-discord-border/60 bg-discord-darkest/60 p-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-discord-faint">In Call</p>
+                                        <span className="text-xs text-discord-muted">{callRoster.length}</span>
+                                    </div>
+                                    <div className="max-h-[360px] overflow-y-auto pr-1 space-y-2">
+                                        {callRoster.map((member) => (
+                                            <div key={member.id} className="flex items-center gap-2.5 rounded-lg px-2 py-2 bg-discord-darkest/70">
+                                                <div className="relative w-8 h-8 rounded-full bg-discord-darkest overflow-hidden flex items-center justify-center text-xs font-semibold text-white">
+                                                    {member.avatar ? (
+                                                        <img src={member.avatar} alt="" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        member.displayName.charAt(0).toUpperCase()
+                                                    )}
+                                                    {member.isLocal && (
+                                                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-discord-darkest" />
+                                                    )}
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm text-discord-light font-semibold truncate">{member.displayName}</p>
+                                                    <p className="text-[11px] text-discord-faint truncate">{member.isLocal ? 'You' : 'In call'}</p>
+                                                </div>
+                                                {member.isMuted && (
+                                                    <span className="w-6 h-6 rounded-full bg-red-500/90 flex items-center justify-center">
+                                                        <MicOff className="w-3 h-3 text-white" />
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </aside>
+                            )}
                         </div>
                         <div className="dm-call__controls mt-4 flex items-center justify-center gap-3">
                             <button
@@ -273,6 +373,13 @@ const DmPanel = ({
                                 title={isSharing ? 'Stop streaming' : 'Share screen'}
                             >
                                 <ScreenShare className="w-5 h-5" />
+                            </button>
+                            <button
+                                onClick={() => onOpenInvite?.()}
+                                className="dm-call__btn w-11 h-11 rounded-full flex items-center justify-center bg-discord-darkest text-discord-light hover:bg-discord-border-light/30"
+                                title="Add people"
+                            >
+                                <UserPlus className="w-5 h-5" />
                             </button>
                             <button
                                 onClick={onEndCall}

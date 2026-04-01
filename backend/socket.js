@@ -22,6 +22,9 @@ const io = new Server(server, {
     },
 });
 
+const ROOM_EMPTY_TTL_MS = 30000;
+const MAX_CALL_PARTICIPANTS = 5;
+
 // ── Redis Adapter (optional — graceful fallback for dev) ─────────────────────
 async function attachRedisAdapter() {
     try {
@@ -115,6 +118,7 @@ io.on("connection", (socket) => {
     socket.on("join_user_room", (userId) => {
         if (userId) {
             socket.join(`user:${userId}`);
+            socket.data.userId = userId;
             console.log(`   → ${socket.id} joined room user:${userId}`);
         }
     });
@@ -182,8 +186,122 @@ io.on("connection", (socket) => {
             channels: new Map(), // channelId -> Map(socketId -> user)
             socketToChannel: new Map(),
             channelCommunity: new Map(), // channelId -> communityId
+            cleanupTimers: new Map(), // channelId -> timeout
         };
     }
+
+    if (!io.callRooms) {
+        io.callRooms = new Map(); // roomId -> { users: Map<userId, { socketId, displayName, avatar }>, invited: Set, cleanupTimer }
+    }
+
+    const getCallRoom = (roomId) => {
+        if (!roomId) return null;
+        const key = roomId?.toString?.() || String(roomId);
+        let room = io.callRooms.get(key);
+        if (!room) {
+            room = { users: new Map(), invited: new Set(), cleanupTimer: null };
+            io.callRooms.set(key, room);
+        }
+        return room;
+    };
+
+    const clearCallRoomCleanup = (roomId) => {
+        const key = roomId?.toString?.() || String(roomId);
+        const room = io.callRooms.get(key);
+        if (room?.cleanupTimer) {
+            clearTimeout(room.cleanupTimer);
+            room.cleanupTimer = null;
+        }
+    };
+
+    const scheduleCallRoomCleanup = (roomId) => {
+        const key = roomId?.toString?.() || String(roomId);
+        const room = io.callRooms.get(key);
+        if (!room) return;
+        if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
+        room.cleanupTimer = setTimeout(() => {
+            const latest = io.callRooms.get(key);
+            if (!latest) return;
+            if (latest.users.size > 0) return;
+            io.callRooms.delete(key);
+        }, ROOM_EMPTY_TTL_MS);
+    };
+
+    const buildRoomUsersPayload = (room) => Array.from(room.users.entries()).map(([userId, info]) => ({
+        userId,
+        socketId: info.socketId,
+        displayName: info.displayName,
+        avatar: info.avatar,
+    }));
+
+    const joinCallRoom = (socketRef, roomId, user) => {
+        if (!roomId) return null;
+        const userId = user?.userId || socketRef.data.userId;
+        if (!userId) return null;
+        socketRef.data.userId = userId;
+        if (user?.displayName) socketRef.data.displayName = user.displayName;
+        if (user?.avatar) socketRef.data.avatar = user.avatar;
+        const room = getCallRoom(roomId);
+        if (!room) return null;
+        const existing = room.users.get(userId);
+        const isRejoin = existing && existing.socketId !== socketRef.id;
+        const isDuplicate = existing && existing.socketId === socketRef.id;
+        if (!existing && room.users.size >= MAX_CALL_PARTICIPANTS) {
+            return { room, isFull: true, userId };
+        }
+        room.users.set(userId, {
+            socketId: socketRef.id,
+            displayName: user?.displayName || socketRef.data.displayName || "Member",
+            avatar: user?.avatar || socketRef.data.avatar || "",
+        });
+        room.invited.delete(userId);
+        clearCallRoomCleanup(roomId);
+        socketRef.join(`callroom:${roomId}`);
+        socketRef.data.activeCallRoom = roomId;
+        return { room, isRejoin, isDuplicate, userId };
+    };
+
+    const leaveCallRoom = (socketRef, roomId) => {
+        const key = roomId?.toString?.() || String(roomId || '');
+        if (!key) return null;
+        const room = io.callRooms.get(key);
+        if (!room) return null;
+        const userId = socketRef.data.userId;
+        if (userId) {
+            const existing = room.users.get(userId);
+            if (existing && existing.socketId === socketRef.id) {
+                room.users.delete(userId);
+            }
+        }
+        socketRef.leave(`callroom:${key}`);
+        if (socketRef.data.activeCallRoom === key) {
+            socketRef.data.activeCallRoom = null;
+        }
+        if (room.users.size === 0) {
+            scheduleCallRoomCleanup(key);
+        }
+        return { room, userId };
+    };
+
+    const clearRoomCleanup = (channelKey) => {
+        const timer = io.voiceState.cleanupTimers.get(channelKey);
+        if (timer) {
+            clearTimeout(timer);
+            io.voiceState.cleanupTimers.delete(channelKey);
+        }
+    };
+
+    const scheduleRoomCleanup = (channelKey) => {
+        clearRoomCleanup(channelKey);
+        const timeout = setTimeout(() => {
+            const channelMap = io.voiceState.channels.get(channelKey);
+            if (channelMap && channelMap.size > 0) return;
+            io.voiceState.channels.delete(channelKey);
+            io.voiceState.channelCommunity.delete(channelKey);
+            io.voiceState.cleanupTimers.delete(channelKey);
+        }, ROOM_EMPTY_TTL_MS);
+        io.voiceState.cleanupTimers.set(channelKey, timeout);
+    };
 
     const emitVoiceMembers = (channelId, communityOverride) => {
         const channelKey = channelId?.toString?.() || String(channelId);
@@ -195,6 +313,7 @@ io.on("connection", (socket) => {
               }))
             : [];
         io.to(`voice:${channelKey}`).emit("voice:members", { channelId: channelKey, members });
+        io.to(`voicewatch:${channelKey}`).emit("voice:members", { channelId: channelKey, members });
         const communityId = communityOverride || io.voiceState.channelCommunity.get(channelKey);
         if (communityId) {
             io.to(`community:${communityId}`).emit("voice:members", { channelId: channelKey, members });
@@ -209,21 +328,30 @@ io.on("connection", (socket) => {
         if (channelMap) {
             channelMap.delete(socket.id);
             if (channelMap.size === 0) {
-                io.voiceState.channels.delete(currentChannel);
+                scheduleRoomCleanup(currentChannel);
             }
         }
         io.voiceState.socketToChannel.delete(socket.id);
         socket.leave(`voice:${currentChannel}`);
         socket.to(`voice:${currentChannel}`).emit("voice:peer-left", { socketId: socket.id });
         emitVoiceMembers(currentChannel, communityId);
-        if (!io.voiceState.channels.get(currentChannel)) {
-            io.voiceState.channelCommunity.delete(currentChannel);
-        }
     };
 
     socket.on("voice:join", ({ channelId, user, communityId }) => {
         if (!channelId) return;
         const channelKey = channelId?.toString?.() || String(channelId);
+        if (user?.userId) {
+            socket.data.userId = user.userId;
+        }
+        if (user?.displayName) socket.data.displayName = user.displayName;
+        if (user?.avatar) socket.data.avatar = user.avatar;
+        const callRoom = io.callRooms?.get(channelKey);
+        const currentUserId = user?.userId || socket.data.userId;
+        if (callRoom && currentUserId && !callRoom.users.has(currentUserId) && callRoom.users.size >= MAX_CALL_PARTICIPANTS) {
+            socket.emit("room-join-denied", { roomId: channelKey, reason: "full", max: MAX_CALL_PARTICIPANTS });
+            return;
+        }
+        clearRoomCleanup(channelKey);
         leaveVoiceChannel();
         socket.join(`voice:${channelKey}`);
 
@@ -232,6 +360,10 @@ io.on("connection", (socket) => {
             userId: user?.userId || null,
             displayName: user?.displayName || "Member",
             avatar: user?.avatar || "",
+            isMuted: false,
+            isSharing: false,
+            isCameraOn: false,
+            screenStreamId: null,
         });
         io.voiceState.channels.set(channelKey, channelMap);
         io.voiceState.socketToChannel.set(socket.id, channelKey);
@@ -250,12 +382,139 @@ io.on("connection", (socket) => {
             userId: user?.userId || null,
             displayName: user?.displayName || "Member",
             avatar: user?.avatar || "",
+            isMuted: false,
         });
         emitVoiceMembers(channelKey);
     });
 
     socket.on("voice:leave", () => {
         leaveVoiceChannel();
+    });
+
+    // ── Call Room Invites ─────────────────────────────────────────────────
+    socket.on("invite-to-room", ({ roomId, invitedUserIds, roomMeta }) => {
+        const senderId = socket.data.userId;
+        if (!roomId || !senderId || !Array.isArray(invitedUserIds)) return;
+        const room = getCallRoom(roomId);
+        if (!room || !room.users.has(senderId)) return;
+        const availableSlots = MAX_CALL_PARTICIPANTS - room.users.size;
+        if (availableSlots <= 0) {
+            socket.emit("room-invite-error", { roomId, reason: "full", max: MAX_CALL_PARTICIPANTS });
+            return;
+        }
+        let remaining = availableSlots;
+        invitedUserIds.forEach((userId) => {
+            if (remaining <= 0) return;
+            if (!userId) return;
+            if (room.users.has(userId)) return;
+            if (room.invited.has(userId)) return;
+            room.invited.add(userId);
+            remaining -= 1;
+            io.to(`user:${userId}`).emit("room-invite", {
+                roomId,
+                invitedBy: senderId,
+                invitedByName: socket.data.displayName || null,
+                invitedByAvatar: socket.data.avatar || null,
+                roomMeta: roomMeta || null,
+            });
+        });
+    });
+
+    socket.on("accept-room-invite", ({ roomId, user }) => {
+        if (!roomId) return;
+        const result = joinCallRoom(socket, roomId, user);
+        if (!result) return;
+        const { room, isDuplicate, isRejoin, userId, isFull } = result;
+        if (isFull) {
+            socket.emit("room-join-denied", { roomId, reason: "full", max: MAX_CALL_PARTICIPANTS });
+            return;
+        }
+        const usersPayload = buildRoomUsersPayload(room);
+        socket.emit("room-users", { roomId, users: usersPayload });
+        if (!isDuplicate) {
+            socket.to(`callroom:${roomId}`).emit("user-joined", {
+                roomId,
+                userId,
+                socketId: socket.id,
+                displayName: socket.data.displayName || "Member",
+                avatar: socket.data.avatar || "",
+                rejoined: !!isRejoin,
+            });
+        }
+    });
+
+    socket.on("reject-room-invite", ({ roomId, invitedBy }) => {
+        const userId = socket.data.userId;
+        if (!roomId || !userId) return;
+        const room = getCallRoom(roomId);
+        if (!room) return;
+        room.invited.delete(userId);
+        io.to(`callroom:${roomId}`).emit("room-invite-updated", { roomId, userId, status: "rejected" });
+        if (invitedBy) {
+            io.to(`user:${invitedBy}`).emit("room-invite-updated", { roomId, userId, status: "rejected" });
+        }
+    });
+
+    socket.on("join-room", ({ roomId, user }) => {
+        if (!roomId) return;
+        const result = joinCallRoom(socket, roomId, user);
+        if (!result) return;
+        const { room, isDuplicate, isRejoin, userId, isFull } = result;
+        if (isFull) {
+            socket.emit("room-join-denied", { roomId, reason: "full", max: MAX_CALL_PARTICIPANTS });
+            return;
+        }
+        const usersPayload = buildRoomUsersPayload(room);
+        socket.emit("room-users", { roomId, users: usersPayload });
+        if (!isDuplicate) {
+            socket.to(`callroom:${roomId}`).emit("user-joined", {
+                roomId,
+                userId,
+                socketId: socket.id,
+                displayName: socket.data.displayName || "Member",
+                avatar: socket.data.avatar || "",
+                rejoined: !!isRejoin,
+            });
+        }
+    });
+
+    socket.on("leave-room", ({ roomId }) => {
+        if (!roomId) return;
+        const result = leaveCallRoom(socket, roomId);
+        if (!result) return;
+        const { userId } = result;
+        socket.to(`callroom:${roomId}`).emit("user-left", { roomId, userId, socketId: socket.id });
+    });
+
+    socket.on("signal", ({ to, data }) => {
+        if (!to) return;
+        io.to(to).emit("signal", { from: socket.id, fromUserId: socket.data.userId || null, data });
+    });
+
+    socket.on("voice:watch", ({ channelId }) => {
+        if (!channelId) return;
+        const channelKey = channelId?.toString?.() || String(channelId);
+        socket.join(`voicewatch:${channelKey}`);
+        emitVoiceMembers(channelKey);
+    });
+
+    socket.on("voice:unwatch", ({ channelId }) => {
+        if (!channelId) return;
+        const channelKey = channelId?.toString?.() || String(channelId);
+        socket.leave(`voicewatch:${channelKey}`);
+    });
+
+    socket.on("voice:peek", ({ channelId }) => {
+        if (!channelId) return;
+        const channelKey = channelId?.toString?.() || String(channelId);
+        const channelMap = io.voiceState.channels.get(channelKey);
+        const members = channelMap
+            ? Array.from(channelMap.entries()).map(([sid, info]) => ({
+                  socketId: sid,
+                  ...info,
+              }))
+            : [];
+        socket.emit("voice:room-status", { roomId: channelKey, members });
     });
 
     socket.on("voice:signal", ({ to, data }) => {
@@ -265,20 +524,69 @@ io.on("connection", (socket) => {
 
     socket.on("voice:share-stop", ({ channelId }) => {
         if (!channelId) return;
+        const channelKey = channelId?.toString?.() || String(channelId);
+        const channelMap = io.voiceState?.channels?.get(channelKey);
+        if (channelMap?.has(socket.id)) {
+            const current = channelMap.get(socket.id);
+            channelMap.set(socket.id, { ...current, isSharing: false, screenStreamId: null });
+            emitVoiceMembers(channelKey);
+        }
         socket.to(`voice:${channelId}`).emit("voice:share-stopped", { socketId: socket.id });
     });
 
-    socket.on("voice:share-start", ({ channelId }) => {
+    socket.on("voice:share-start", ({ channelId, streamId }) => {
         if (!channelId) return;
-        socket.to(`voice:${channelId}`).emit("voice:share-started", { socketId: socket.id });
+        const channelKey = channelId?.toString?.() || String(channelId);
+        const channelMap = io.voiceState?.channels?.get(channelKey);
+        if (channelMap?.has(socket.id)) {
+            const current = channelMap.get(socket.id);
+            channelMap.set(socket.id, { ...current, isSharing: true, screenStreamId: streamId || null });
+            emitVoiceMembers(channelKey);
+        }
+        socket.to(`voice:${channelId}`).emit("voice:share-started", { socketId: socket.id, streamId: streamId || null });
     });
 
     socket.on("voice:camera-stop", ({ channelId }) => {
         if (!channelId) return;
+        const channelKey = channelId?.toString?.() || String(channelId);
+        const channelMap = io.voiceState?.channels?.get(channelKey);
+        if (channelMap?.has(socket.id)) {
+            const current = channelMap.get(socket.id);
+            channelMap.set(socket.id, { ...current, isCameraOn: false });
+            emitVoiceMembers(channelKey);
+        }
         socket.to(`voice:${channelId}`).emit("voice:camera-stopped", { socketId: socket.id });
     });
 
+    socket.on("voice:camera-start", ({ channelId }) => {
+        if (!channelId) return;
+        const channelKey = channelId?.toString?.() || String(channelId);
+        const channelMap = io.voiceState?.channels?.get(channelKey);
+        if (channelMap?.has(socket.id)) {
+            const current = channelMap.get(socket.id);
+            channelMap.set(socket.id, { ...current, isCameraOn: true });
+            emitVoiceMembers(channelKey);
+        }
+    });
+
+    socket.on("voice:mute", ({ channelId, isMuted }) => {
+        const channelKey = channelId?.toString?.() || String(channelId);
+        const channelMap = io.voiceState?.channels?.get(channelKey);
+        if (!channelMap) return;
+        const userInfo = channelMap.get(socket.id);
+        if (!userInfo) return;
+        channelMap.set(socket.id, { ...userInfo, isMuted: !!isMuted });
+        emitVoiceMembers(channelKey);
+    });
+
     socket.on("disconnect", () => {
+        if (socket.data.activeCallRoom) {
+            const roomId = socket.data.activeCallRoom;
+            const result = leaveCallRoom(socket, roomId);
+            if (result) {
+                socket.to(`callroom:${roomId}`).emit("user-left", { roomId, userId: result.userId, socketId: socket.id });
+            }
+        }
         leaveVoiceChannel();
         console.log(`🔌 Client disconnected: ${socket.id}`);
     });

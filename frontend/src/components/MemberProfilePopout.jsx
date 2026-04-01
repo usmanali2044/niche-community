@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Copy, Sparkles } from 'lucide-react';
 
 const presenceColor = (presence) => {
@@ -10,6 +10,11 @@ const presenceColor = (presence) => {
 
 const MemberProfilePopout = ({ isOpen, onClose, member, anchorClassName = '' }) => {
     const [copied, setCopied] = useState(false);
+    const [isBioExpanded, setIsBioExpanded] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) setIsBioExpanded(false);
+    }, [isOpen, member?._id]);
 
     if (!isOpen || !member) return null;
 
@@ -21,6 +26,7 @@ const MemberProfilePopout = ({ isOpen, onClose, member, anchorClassName = '' }) 
     const presence = member.presence || 'offline';
     const bannerColor = member.bannerColor || '#3f4f4f';
     const isPremium = ['premium', 'enterprise'].includes(member.tier || 'free');
+    const showBioToggle = statusText.length > 140;
 
     const handleCopyId = async () => {
         try {
@@ -78,9 +84,21 @@ const MemberProfilePopout = ({ isOpen, onClose, member, anchorClassName = '' }) 
                         </div>
                     </div>
 
-                    <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-discord-darkest text-sm text-discord-light">
-                        <span className={`w-2.5 h-2.5 rounded-full ${presenceColor(presence)}`} />
-                        {statusText}
+                    <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-2xl bg-discord-darkest text-sm text-discord-light">
+                        <span className={`mt-1 w-2.5 h-2.5 shrink-0 rounded-full ${presenceColor(presence)}`} />
+                        <div className="flex-1 min-w-0">
+                            <p className={`leading-snug break-words ${isBioExpanded ? '' : 'line-clamp-3'}`}>
+                                {statusText}
+                            </p>
+                            {showBioToggle && (
+                                <button
+                                    onClick={() => setIsBioExpanded((v) => !v)}
+                                    className="mt-1 text-[11px] font-semibold text-blurple hover:text-blurple-hover"
+                                >
+                                    {isBioExpanded ? 'Show less' : 'Read more'}
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

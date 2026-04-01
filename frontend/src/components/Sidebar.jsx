@@ -328,30 +328,27 @@ const Sidebar = ({ isOpen, onClose, onProfileClick, onFriendsClick, onSettingsCl
                                     Premium
                                 </span>
                             )}
-                            {isActive && (
+                            {isActive && canEditChannel && (
                                 <div className="ml-auto flex items-center gap-1">
-                                    <Users className="w-3.5 h-3.5 text-discord-faint" />
-                                    {canEditChannel && (
-                                        <span
-                                            role="button"
-                                            tabIndex={0}
-                                            onClick={(e) => {
+                                    <span
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onOpenChannelSettings?.(ch);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
                                                 e.stopPropagation();
                                                 onOpenChannelSettings?.(ch);
-                                            }}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' || e.key === ' ') {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    onOpenChannelSettings?.(ch);
-                                                }
-                                            }}
-                                            className="w-6 h-6 rounded-md hover:bg-discord-border-light/30 flex items-center justify-center transition-colors cursor-pointer"
-                                            title="Edit channel"
-                                        >
-                                            <Settings className="w-3.5 h-3.5 text-discord-faint" />
-                                        </span>
-                                    )}
+                                            }
+                                        }}
+                                        className="w-6 h-6 rounded-md hover:bg-discord-border-light/30 flex items-center justify-center transition-colors cursor-pointer"
+                                        title="Edit channel"
+                                    >
+                                        <Settings className="w-3.5 h-3.5 text-discord-faint" />
+                                    </span>
                                 </div>
                             )}
                         </button>
@@ -490,16 +487,6 @@ const Sidebar = ({ isOpen, onClose, onProfileClick, onFriendsClick, onSettingsCl
                     <p className="text-[11px] text-discord-faint truncate">{profile?.bio || 'No bio yet'}</p>
                 </div>
                 <div className="ml-auto flex items-center gap-1">
-                    <button
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onFriendsClick?.();
-                        }}
-                        className="w-7 h-7 rounded-md bg-discord-darkest flex items-center justify-center hover:bg-discord-border-light/40 cursor-pointer"
-                        title="Friends"
-                    >
-                        <Users className="w-3.5 h-3.5 text-discord-muted" />
-                    </button>
                     <button
                         onClick={(event) => {
                             event.stopPropagation();

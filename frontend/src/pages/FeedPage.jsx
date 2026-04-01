@@ -57,6 +57,14 @@ const FeedPage = () => {
     const [isServerSwitching, setIsServerSwitching] = useState(false);
     const [editChannelSignal, setEditChannelSignal] = useState(0);
     const [pendingEditChannelId, setPendingEditChannelId] = useState(null);
+    const [dmRoomStatus, setDmRoomStatus] = useState({});
+    const [showCallInvite, setShowCallInvite] = useState(false);
+    const [callInviteSearch, setCallInviteSearch] = useState('');
+    const [callInviteSelection, setCallInviteSelection] = useState([]);
+    const [callInviteError, setCallInviteError] = useState('');
+    const [roomInvites, setRoomInvites] = useState({});
+    const [incomingRoomInvite, setIncomingRoomInvite] = useState(null);
+    const [callToast, setCallToast] = useState('');
     const { user, setUser } = useAuthStore();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -369,6 +377,9 @@ const FeedPage = () => {
         const handleThreadUpdated = (thread) => {
             if (!thread?._id) return;
             upsertThread(thread);
+            if (activeDm?._id === thread._id) {
+                setActiveDm(thread);
+            }
         };
         const handleThreadRemoved = ({ threadId: removedId }) => {
             if (!removedId) return;
@@ -455,9 +466,6 @@ const FeedPage = () => {
                 setActiveDm(outgoingCall.toUser);
             }
             setViewMode('dm');
-            if (activeVoiceChannel?._id) {
-                leaveVoice();
-            }
             joinVoice({ _id: `dm-${tId}`, name: 'Direct Call' });
         };
         const handleCallDeclined = ({ threadId: tId }) => {
@@ -482,9 +490,6 @@ const FeedPage = () => {
             });
         };
         const handleCallEnded = ({ threadId: tId }) => {
-            if (activeDmCall?.threadId !== tId) return;
-            setActiveDmCall(null);
-            leaveVoice();
             setOngoingDmCalls((prev) => {
                 const next = new Set(prev);
                 next.delete(tId);
@@ -494,7 +499,26 @@ const FeedPage = () => {
         const handleVoicePresence = ({ channelId, members }) => {
             if (!channelId) return;
             const channelKey = channelId?.toString?.() || String(channelId);
-            if (channelKey.startsWith('dm-')) return;
+            if (channelKey.startsWith('dm-')) {
+                const threadKey = channelKey.replace(/^dm-/, '');
+                const list = Array.isArray(members) ? members : [];
+                setDmRoomStatus((prev) => ({
+                    ...prev,
+                    [threadKey]: {
+                        members: list,
+                        count: list.length,
+                    },
+                }));
+                setRoomInvites((prev) => {
+                    const existing = prev[threadKey] || [];
+                    if (existing.length === 0) return prev;
+                    const memberIds = new Set(list.map((m) => m.userId).filter(Boolean));
+                    const filtered = existing.filter((id) => !memberIds.has(id));
+                    if (filtered.length === existing.length) return prev;
+                    return { ...prev, [threadKey]: filtered };
+                });
+                return;
+            }
             if (!Array.isArray(members) || members.length === 0) {
                 setVoicePresence((prev) => {
                     if (!prev[channelKey]) return prev;
@@ -508,6 +532,48 @@ const FeedPage = () => {
                 ...prev,
                 [channelKey]: members,
             }));
+        };
+        const handleRoomStatus = ({ roomId, members }) => {
+            if (!roomId || !roomId.startsWith('dm-')) return;
+            const threadKey = roomId.replace(/^dm-/, '');
+            const list = Array.isArray(members) ? members : [];
+            setDmRoomStatus((prev) => ({
+                ...prev,
+                [threadKey]: {
+                    members: list,
+                    count: list.length,
+                },
+            }));
+        };
+        const handleRoomInvite = (invite) => {
+            if (!invite?.roomId) return;
+            if (!activeDmCall && !incomingCall) {
+                playRingtone();
+            }
+            setIncomingRoomInvite(invite);
+        };
+        const handleRoomInviteUpdate = ({ roomId, userId }) => {
+            if (!roomId || !userId || !roomId.startsWith('dm-')) return;
+            const threadKey = roomId.replace(/^dm-/, '');
+            setRoomInvites((prev) => {
+                const existing = prev[threadKey] || [];
+                if (!existing.includes(userId)) return prev;
+                return { ...prev, [threadKey]: existing.filter((id) => id !== userId) };
+            });
+        };
+        const handleRoomJoinDenied = ({ roomId, reason, max }) => {
+            if (reason !== 'full') return;
+            setCallToast(`Call is full (max ${max || 5} people).`);
+            setTimeout(() => setCallToast(''), 2200);
+            if (activeVoiceChannel?._id === roomId) {
+                leaveVoice();
+                setActiveDmCall(null);
+            }
+        };
+        const handleRoomInviteError = ({ reason, max }) => {
+            if (reason !== 'full') return;
+            setCallToast(`Call is full (max ${max || 5} people).`);
+            setTimeout(() => setCallToast(''), 2200);
         };
         const handleNewEventSocket = (event) => handleNewEvent(event);
         const handleRsvpSocket = (payload) => handleRsvpUpdate(payload);
@@ -534,6 +600,11 @@ const FeedPage = () => {
         socket.on('dm:call:cancelled', handleCallCancelled);
         socket.on('dm:call:ended', handleCallEnded);
         socket.on('voice:members', handleVoicePresence);
+        socket.on('voice:room-status', handleRoomStatus);
+        socket.on('room-invite', handleRoomInvite);
+        socket.on('room-invite-updated', handleRoomInviteUpdate);
+        socket.on('room-join-denied', handleRoomJoinDenied);
+        socket.on('room-invite-error', handleRoomInviteError);
         socket.on('new_event', handleNewEventSocket);
         socket.on('rsvp_update', handleRsvpSocket);
         socket.on('event_deleted', handleDeleteSocket);
@@ -560,6 +631,11 @@ const FeedPage = () => {
         socket.off('dm:call:cancelled', handleCallCancelled);
         socket.off('dm:call:ended', handleCallEnded);
         socket.off('voice:members', handleVoicePresence);
+        socket.off('voice:room-status', handleRoomStatus);
+        socket.off('room-invite', handleRoomInvite);
+        socket.off('room-invite-updated', handleRoomInviteUpdate);
+        socket.off('room-join-denied', handleRoomJoinDenied);
+        socket.off('room-invite-error', handleRoomInviteError);
         socket.off('new_event', handleNewEventSocket);
         socket.off('rsvp_update', handleRsvpSocket);
         socket.off('event_deleted', handleDeleteSocket);
@@ -605,6 +681,41 @@ const FeedPage = () => {
         removeThread,
         activeDm,
     ]);
+
+    useEffect(() => {
+        if (!socket || !threadId) return;
+        const channelId = `dm-${threadId}`;
+        socket.emit('voice:watch', { channelId });
+        socket.emit('voice:peek', { channelId });
+        return () => {
+            socket.emit('voice:unwatch', { channelId });
+        };
+    }, [socket, threadId]);
+
+    useEffect(() => {
+        setShowCallInvite(false);
+        setCallInviteSelection([]);
+        setCallInviteSearch('');
+        setCallInviteError('');
+    }, [threadId]);
+
+    const prevRoomMembersRef = useRef(new Set());
+    useEffect(() => {
+        if (!threadId) return;
+        const members = dmRoomStatus[threadId]?.members || [];
+        const nextIds = new Set(members.map((m) => m.userId).filter(Boolean));
+        const prevIds = prevRoomMembersRef.current;
+        const joinedIds = Array.from(nextIds).filter((id) => !prevIds.has(id) && id !== user?._id);
+        if (joinedIds.length > 0) {
+            const joinedUser = friends.find((f) => f._id === joinedIds[0]);
+            const name = joinedUser?.displayName || 'Someone';
+            setCallToast(`${name} joined the call`);
+            setTimeout(() => setCallToast(''), 2200);
+        }
+        prevRoomMembersRef.current = nextIds;
+    }, [dmRoomStatus, threadId, friends, user?._id]);
+
+    // Intentionally do NOT auto-convert DMs into group threads when call size grows.
 
     useEffect(() => {
         if (!activeCommunityId) return;
@@ -684,6 +795,102 @@ const FeedPage = () => {
         });
     }, [socket, user?._id, displayName, profile?.avatar]);
 
+    const dmRoomInfo = threadId ? dmRoomStatus[threadId] : null;
+    const dmRoomCount = dmRoomInfo?.count || 0;
+    const isDmRoomActive = dmRoomCount > 0;
+    const isInDmCall = !!threadId && activeVoiceChannel?._id === `dm-${threadId}`;
+    const dmRoomMembers = dmRoomInfo?.members || [];
+    const activeCallThreadId = activeDmCall?.threadId || null;
+    const isViewingActiveCall = !!activeCallThreadId && viewMode === 'dm' && threadId === activeCallThreadId;
+    const activeCallRoomInfo = activeCallThreadId ? dmRoomStatus[activeCallThreadId] : null;
+    const activeCallCount = activeCallRoomInfo?.count || 0;
+    const activeCallMembers = activeCallRoomInfo?.members || [];
+    const activeCallEntry = useMemo(() => {
+        if (!activeCallThreadId) return null;
+        if (activeDm && activeDm._id === activeCallThreadId) return activeDm;
+        const thread = (dmThreads || []).find((t) => t._id === activeCallThreadId);
+        return thread ? buildDmEntry(thread) : null;
+    }, [activeCallThreadId, activeDm, dmThreads, buildDmEntry]);
+    const activeCallTitle = activeCallEntry?.displayName || activeDmCall?.peer?.displayName || 'Call';
+
+    const joinDmRoom = useCallback((targetThreadId = threadId, dmEntry = activeDm) => {
+        if (!targetThreadId || !dmEntry) return;
+        const roomInfo = dmRoomStatus[targetThreadId];
+        const roomCount = roomInfo?.count || 0;
+        const roomKey = `dm-${targetThreadId}`;
+        if (roomCount >= 5 && activeVoiceChannel?._id !== roomKey) {
+            setCallToast('Call is full (max 5 people).');
+            setTimeout(() => setCallToast(''), 2200);
+            return;
+        }
+        setViewMode('dm');
+        const targetChannelId = roomKey;
+        if (activeVoiceChannel?._id && activeVoiceChannel._id !== targetChannelId) {
+            leaveVoice();
+        }
+        if (activeVoiceChannel?._id === targetChannelId) {
+            setActiveDmCall({
+                threadId: targetThreadId,
+                peer: { displayName: dmEntry.displayName, isGroup: dmEntry.isGroup },
+                isGroup: dmEntry.isGroup,
+            });
+            return;
+        }
+        const callName = dmEntry.isGroup ? 'Group Call' : 'Direct Call';
+        joinVoice({ _id: targetChannelId, name: callName });
+        setActiveDmCall({
+            threadId: targetThreadId,
+            peer: { displayName: dmEntry.displayName, isGroup: dmEntry.isGroup },
+            isGroup: dmEntry.isGroup,
+        });
+    }, [threadId, activeDm, joinVoice, setViewMode, leaveVoice, activeVoiceChannel?._id, dmRoomStatus]);
+
+    const returnToActiveCall = useCallback(async () => {
+        if (!activeCallThreadId) return;
+        setViewMode('dm');
+        let entry = activeCallEntry;
+        if (!entry) {
+            try {
+                setThreadId(activeCallThreadId);
+                socket?.emit('join_dm', activeCallThreadId);
+                await fetchMessages(activeCallThreadId);
+                const threadInfo = await fetchThreadInfo(activeCallThreadId);
+                const fetchedEntry = buildDmEntry(threadInfo);
+                if (fetchedEntry) entry = fetchedEntry;
+            } catch { }
+        }
+        if (!entry) {
+            entry = {
+                _id: activeCallThreadId,
+                displayName: activeDmCall?.peer?.displayName || 'Call',
+                isGroup: activeDmCall?.isGroup ?? true,
+                participants: activeCallMembers.map((m) => ({ _id: m.userId, displayName: m.displayName, avatar: m.avatar })),
+            };
+        }
+        setActiveDm(entry);
+        joinDmRoom(activeCallThreadId, entry);
+    }, [
+        activeCallThreadId,
+        activeCallEntry,
+        setViewMode,
+        setThreadId,
+        socket,
+        fetchMessages,
+        fetchThreadInfo,
+        buildDmEntry,
+        setActiveDm,
+        joinDmRoom,
+        activeDmCall,
+        activeCallMembers,
+    ]);
+
+    const joinDmRoomWithVideo = useCallback(() => {
+        joinDmRoom();
+        setTimeout(() => {
+            if (!isCameraOn) startCamera();
+        }, 200);
+    }, [joinDmRoom, startCamera, isCameraOn]);
+
     const startCallForFriend = useCallback(async (friend) => {
         if (!socket || !friend?._id) return;
         if (incomingCall || outgoingCall || activeDmCall) return;
@@ -722,13 +929,8 @@ const FeedPage = () => {
     const startDmCall = useCallback(() => {
         if (!socket || !activeDm || !threadId) return;
         if (incomingCall || outgoingCall || activeDmCall) return;
-        if (activeDm.isGroup && ongoingDmCalls.has(threadId)) {
-            setActiveDmCall({ threadId, peer: { displayName: activeDm.displayName, isGroup: true }, isGroup: true });
-            setViewMode('dm');
-            if (activeVoiceChannel?._id) {
-                leaveVoice();
-            }
-            joinVoice({ _id: `dm-${threadId}`, name: 'Group Call' });
+        if (isDmRoomActive) {
+            joinDmRoom();
             return;
         }
         const callMeta = {
@@ -748,6 +950,7 @@ const FeedPage = () => {
         if (activeDm.isGroup) {
             const recipients = (activeDm.participants || []).filter((p) => p._id !== user?._id);
             if (recipients.length === 0) return;
+            joinDmRoom();
             setOutgoingCall({
                 threadId,
                 toUser: { displayName: activeDm.displayName, isGroup: true },
@@ -774,12 +977,13 @@ const FeedPage = () => {
             avatar: peer?.avatar || activeDm.avatar || '',
         };
         if (!toUser._id) return;
+        joinDmRoom();
         setOutgoingCall({ threadId, toUser });
         socket.emit('dm:call:start', {
             toUserId: toUser._id,
             ...callMeta,
         });
-    }, [socket, activeDm, threadId, incomingCall, outgoingCall, activeDmCall, user?._id, displayName, profile?.avatar, sendGroupCallInvite, ongoingDmCalls, activeVoiceChannel?._id, leaveVoice, joinVoice]);
+    }, [socket, activeDm, threadId, incomingCall, outgoingCall, activeDmCall, user?._id, displayName, profile?.avatar, sendGroupCallInvite, isDmRoomActive, joinDmRoom]);
 
     const openGroupAddModal = useCallback(() => {
         setGroupSearch('');
@@ -817,6 +1021,89 @@ const FeedPage = () => {
             return [...prev, id];
         });
     };
+
+    const callRoomId = threadId ? `dm-${threadId}` : null;
+    const callRoomMembers = threadId ? (dmRoomStatus[threadId]?.members || []) : [];
+    const callRoomMemberIds = useMemo(() => new Set(callRoomMembers.map((m) => m.userId).filter(Boolean)), [callRoomMembers]);
+    const callRoomInvitedIds = useMemo(() => new Set((roomInvites[threadId] || [])), [roomInvites, threadId]);
+
+    const callInviteCandidates = useMemo(() => {
+        const query = callInviteSearch.trim().toLowerCase();
+        return friends
+            .filter((f) => f._id !== user?._id)
+            .filter((f) => {
+                if (!query) return true;
+                return (f.displayName || '').toLowerCase().includes(query)
+                    || (f.username || '').toLowerCase().includes(query);
+            });
+    }, [friends, callInviteSearch, user?._id]);
+
+    const toggleCallInviteSelection = (id) => {
+        setCallInviteError('');
+        setCallInviteSelection((prev) => {
+            if (prev.includes(id)) return prev.filter((x) => x !== id);
+            return [...prev, id];
+        });
+    };
+
+    const handleSendCallInvites = async () => {
+        if (!socket || !callRoomId || callInviteSelection.length === 0) return;
+        if (!isInDmCall) {
+            setCallInviteError('Join the call before inviting people.');
+            return;
+        }
+        if (!threadId) {
+            setCallInviteError('Open the DM before inviting people.');
+            return;
+        }
+        let threadEntry = activeDm;
+        if (activeDm && !activeDm.isGroup) {
+            const existingIds = new Set(
+                (activeDm.participants || [])
+                    .map((p) => p?._id?.toString?.() || String(p?._id || ''))
+                    .filter(Boolean)
+            );
+            const missingIds = callInviteSelection.filter((id) => !existingIds.has(id));
+            if (missingIds.length > 0) {
+                try {
+                    const updatedThread = await addParticipantsToThread(threadId, missingIds);
+                    const entry = buildDmEntry(updatedThread);
+                    if (entry) {
+                        setActiveDm(entry);
+                        setThreadId(entry._id);
+                        threadEntry = entry;
+                    }
+                } catch (err) {
+                    setCallInviteError(err?.message || 'Could not convert this DM into a group.');
+                    return;
+                }
+            }
+        }
+        socket.emit('invite-to-room', {
+            roomId: callRoomId,
+            invitedUserIds: callInviteSelection,
+            roomMeta: {
+                displayName: threadEntry?.displayName || activeDm?.displayName || 'Call',
+                isGroup: !!threadEntry?.isGroup || !!activeDm?.isGroup,
+                participants: threadEntry?.participants || activeDm?.participants || [],
+            },
+        });
+        setRoomInvites((prev) => {
+            const existing = new Set(prev[threadId] || []);
+            callInviteSelection.forEach((id) => existing.add(id));
+            return { ...prev, [threadId]: Array.from(existing) };
+        });
+        setCallInviteSelection([]);
+        setShowCallInvite(false);
+    };
+
+    const openCallInviteModal = useCallback(() => {
+        if (!callRoomId) return;
+        setCallInviteSearch('');
+        setCallInviteSelection([]);
+        setCallInviteError('');
+        setShowCallInvite(true);
+    }, [callRoomId]);
 
     const handleAddGroupMembers = async () => {
         if (!activeDm?._id || groupSelection.length === 0) return;
@@ -858,24 +1145,24 @@ const FeedPage = () => {
         const { threadId: incomingThreadId, fromUser, threadMeta } = incomingCall;
         setIncomingCall(null);
         setViewMode('dm');
+        let nextEntry = null;
         if (threadMeta?.isGroup) {
             setThreadId(incomingThreadId);
             socket?.emit('join_dm', incomingThreadId);
             await fetchMessages(incomingThreadId);
-            let entry = null;
             if (threadMeta?.participants) {
-                entry = buildDmEntry({
+                nextEntry = buildDmEntry({
                     _id: incomingThreadId,
                     participants: threadMeta.participants,
                     displayName: threadMeta.displayName,
                     isGroup: true,
                 });
             }
-            if (!entry) {
+            if (!nextEntry) {
                 const threadInfo = await fetchThreadInfo(incomingThreadId);
-                entry = buildDmEntry(threadInfo);
+                nextEntry = buildDmEntry(threadInfo);
             }
-            if (entry) setActiveDm(entry);
+            if (nextEntry) setActiveDm(nextEntry);
         } else {
             const nextDm = {
                 _id: fromUser.userId,
@@ -890,16 +1177,65 @@ const FeedPage = () => {
                 await fetchMessages(tid);
                 const threadInfo = await fetchThreadInfo(tid);
                 const entry = buildDmEntry(threadInfo);
-                if (entry) setActiveDm(entry);
+                if (entry) {
+                    setActiveDm(entry);
+                    nextEntry = entry;
+                }
             } catch { }
         }
-        setActiveDmCall({ threadId: incomingThreadId, peer: fromUser, isGroup: threadMeta?.isGroup });
         socket?.emit('dm:call:accept', { toUserId: fromUser.userId, threadId: incomingThreadId });
-        if (activeVoiceChannel?._id) {
-            leaveVoice();
+        joinDmRoom(incomingThreadId, nextEntry || activeDm);
+    }, [incomingCall, stopRingtone, openThread, fetchMessages, fetchThreadInfo, buildDmEntry, socket, setThreadId, joinDmRoom]);
+
+    const acceptRoomInvite = useCallback(async () => {
+        if (!incomingRoomInvite) return;
+        const { roomId } = incomingRoomInvite;
+        stopRingtone();
+        setIncomingRoomInvite(null);
+        if (socket) {
+            socket.emit('accept-room-invite', { roomId });
         }
-        joinVoice({ _id: `dm-${incomingThreadId}`, name: 'Direct Call' });
-    }, [incomingCall, stopRingtone, openThread, fetchMessages, fetchThreadInfo, buildDmEntry, socket, joinVoice, leaveVoice, activeVoiceChannel?._id, setThreadId]);
+        if (!roomId?.startsWith('dm-')) return;
+        const tId = roomId.replace(/^dm-/, '');
+        setViewMode('dm');
+        const existingThread = (dmThreads || []).find((t) => t._id === tId);
+        let entry = existingThread ? buildDmEntry(existingThread) : null;
+        if (!entry && incomingRoomInvite?.roomMeta) {
+            entry = buildDmEntry({
+                _id: tId,
+                participants: incomingRoomInvite.roomMeta.participants || [],
+                displayName: incomingRoomInvite.roomMeta.displayName,
+                isGroup: incomingRoomInvite.roomMeta.isGroup,
+            });
+        }
+        try {
+            setThreadId(tId);
+            socket?.emit('join_dm', tId);
+            await fetchMessages(tId);
+            const threadInfo = await fetchThreadInfo(tId);
+            const fetchedEntry = buildDmEntry(threadInfo);
+            if (fetchedEntry) entry = fetchedEntry;
+        } catch {
+            // keep fallback entry if fetch fails
+        }
+        if (!entry) {
+            entry = {
+                _id: tId,
+                displayName: incomingRoomInvite?.roomMeta?.displayName || 'Call',
+                isGroup: incomingRoomInvite?.roomMeta?.isGroup ?? true,
+                participants: incomingRoomInvite?.roomMeta?.participants || [],
+            };
+        }
+        setActiveDm(entry);
+        joinDmRoom(tId, entry);
+    }, [incomingRoomInvite, socket, fetchMessages, fetchThreadInfo, buildDmEntry, joinDmRoom, setThreadId, setViewMode, dmThreads, stopRingtone]);
+
+    const rejectRoomInvite = useCallback(() => {
+        if (!incomingRoomInvite) return;
+        socket?.emit('reject-room-invite', { roomId: incomingRoomInvite.roomId, invitedBy: incomingRoomInvite.invitedBy });
+        stopRingtone();
+        setIncomingRoomInvite(null);
+    }, [incomingRoomInvite, socket, stopRingtone]);
 
     const declineDmCall = useCallback(() => {
         if (!incomingCall) return;
@@ -927,33 +1263,10 @@ const FeedPage = () => {
 
     const endDmCall = useCallback(() => {
         if (!activeDmCall) return;
-        if (activeDmCall.isGroup) {
-            const participantCount = voiceParticipants?.length || 1;
-            if (participantCount <= 2 && activeDm?.participants?.length) {
-                activeDm.participants
-                    .filter((p) => p._id !== user?._id)
-                    .forEach((p) => {
-                        socket?.emit('dm:call:end', { toUserId: p._id, threadId: activeDmCall.threadId });
-                    });
-                setOngoingDmCalls((prev) => {
-                    const next = new Set(prev);
-                    next.delete(activeDmCall.threadId);
-                    return next;
-                });
-            }
-        } else {
-            const peerId = activeDmCall.peer?.userId || activeDmCall.peer?._id;
-            socket?.emit('dm:call:end', { toUserId: peerId, threadId: activeDmCall.threadId });
-            setOngoingDmCalls((prev) => {
-                const next = new Set(prev);
-                next.delete(activeDmCall.threadId);
-                return next;
-            });
-        }
         setActiveDmCall(null);
         if (isSharing) stopScreenShare();
         leaveVoice();
-    }, [activeDmCall, activeDm?.participants, user?._id, socket, leaveVoice, isSharing, stopScreenShare, voiceParticipants]);
+    }, [activeDmCall, leaveVoice, isSharing, stopScreenShare]);
 
     const handleLeaveGroup = useCallback(async () => {
         if (!activeDm?.isGroup || !activeDm?._id) return;
@@ -1306,9 +1619,9 @@ const FeedPage = () => {
                                 <button
                                     key={m._id}
                                     onClick={() => { setSelectedMember(m); setShowMemberPopout(true); }}
-                                    className="w-full flex items-center gap-2 text-sm text-discord-light rounded-lg px-2 py-1.5 hover:bg-discord-darkest/70 transition cursor-pointer text-left"
+                                    className="w-full flex items-start gap-2 text-sm text-discord-light rounded-lg px-2 py-1.5 hover:bg-discord-darkest/70 transition cursor-pointer text-left"
                                 >
-                                    <div className="relative w-8 h-8 rounded-full bg-discord-darkest flex items-center justify-center text-xs font-semibold">
+                                    <div className="relative w-8 h-8 shrink-0 rounded-full bg-discord-darkest flex items-center justify-center text-xs font-semibold">
                                         {m.avatar ? (
                                             <img src={m.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
                                         ) : (
@@ -1316,10 +1629,12 @@ const FeedPage = () => {
                                         )}
                                         <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-discord-darker ${presenceColor(m.presence)}`} />
                                     </div>
-                                    <div>
-                                        <p className="text-sm font-semibold text-discord-white">{m.displayName}</p>
-                                        {filterStatusText(m.statusText) && (
-                                            <p className="text-[11px] text-discord-faint">{filterStatusText(m.statusText)}</p>
+                                    <div className="min-w-0 flex-1 leading-tight">
+                                        <p className="text-sm font-semibold text-discord-white truncate">{m.displayName}</p>
+                                        {filterStatusText(m.bio || m.statusText) && (
+                                            <p className="text-[11px] text-discord-faint line-clamp-2 break-words">
+                                                {filterStatusText(m.bio || m.statusText)}
+                                            </p>
                                         )}
                                     </div>
                                 </button>
@@ -1609,6 +1924,9 @@ const FeedPage = () => {
                                 onOpenSidebar={() => setShowMobileDmList(true)}
                                 onOpenServers={() => setShowMobileServers(true)}
                                 onCall={startDmCall}
+                                onJoinCall={joinDmRoom}
+                                onJoinWithVideo={joinDmRoomWithVideo}
+                                onOpenInvite={openCallInviteModal}
                                 onAddToGroup={openGroupAddModal}
                                 onLeaveGroup={handleLeaveGroup}
                                 canAddToGroup={!!activeDm}
@@ -1636,6 +1954,12 @@ const FeedPage = () => {
                                 participants={voiceParticipants}
                                 isRemoteScreenShare={isRemoteScreenShare}
                                 onOpenStreamFullscreen={(stream) => setFullscreenStream(stream)}
+                                callStatus={{
+                                    isActive: isDmRoomActive,
+                                    participantCount: dmRoomCount,
+                                    isInCall: isInDmCall,
+                                    members: dmRoomMembers,
+                                }}
                             />
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-discord-faint">Select a friend to start chatting.</div>
@@ -2155,7 +2479,134 @@ const FeedPage = () => {
                 </div>
             )}
 
-            {outgoingCall && (
+            {showCallInvite && (
+                <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div className="w-[520px] max-w-[92vw] rounded-2xl border border-discord-border/60 bg-discord-darker shadow-2xl">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-discord-darkest/80">
+                            <div>
+                                <h3 className="text-lg font-semibold text-white">Invite People to Call</h3>
+                                <p className="text-xs text-discord-faint mt-1">
+                                    Invite friends to join this call.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowCallInvite(false)}
+                                className="w-8 h-8 rounded-full bg-discord-darkest/70 text-discord-faint hover:text-white flex items-center justify-center"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="px-6 pt-4 pb-2">
+                            <div className="flex items-center gap-3">
+                                <input
+                                    value={callInviteSearch}
+                                    onChange={(e) => setCallInviteSearch(e.target.value)}
+                                    placeholder="Search for friends"
+                                    className="flex-1 px-3 py-2 rounded-xl bg-discord-darkest text-sm text-discord-light border border-discord-border/60 focus:outline-none focus:ring-2 focus:ring-blurple/60"
+                                />
+                                <button
+                                    onClick={handleSendCallInvites}
+                                    disabled={callInviteSelection.length === 0}
+                                    className="px-4 py-2 rounded-xl bg-blurple text-white text-sm font-semibold disabled:opacity-50"
+                                >
+                                    Invite
+                                </button>
+                            </div>
+                        </div>
+                        <div className="px-6 pb-5 max-h-[360px] overflow-y-auto space-y-1">
+                            {callInviteError && (
+                                <div className="px-3 py-2 rounded-lg text-xs text-discord-red bg-discord-red/10 border border-discord-red/30">
+                                    {callInviteError}
+                                </div>
+                            )}
+                            {callInviteCandidates.length === 0 && (
+                                <div className="px-3 py-2 text-xs text-discord-faint">No friends match your search.</div>
+                            )}
+                            {callInviteCandidates.map((friend) => {
+                                const isInCall = callRoomMemberIds.has(friend._id);
+                                const isInvited = callRoomInvitedIds.has(friend._id);
+                                const isSelected = callInviteSelection.includes(friend._id);
+                                const isDisabled = isInCall || isInvited;
+                                return (
+                                    <button
+                                        key={friend._id}
+                                        disabled={isDisabled}
+                                        onClick={() => toggleCallInviteSelection(friend._id)}
+                                        className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-left transition ${
+                                            isDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-discord-darkest/70'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-discord-darkest flex items-center justify-center text-xs font-semibold text-discord-light overflow-hidden">
+                                                {friend.avatar ? (
+                                                    <img src={friend.avatar} alt="" className="w-10 h-10 object-cover" />
+                                                ) : (
+                                                    (friend.displayName || 'F').charAt(0).toUpperCase()
+                                                )}
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-discord-light font-semibold">{friend.displayName}</p>
+                                                <p className="text-xs text-discord-faint">{friend.username}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {isInCall && (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-200">
+                                                    In Call
+                                                </span>
+                                            )}
+                                            {!isInCall && isInvited && (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-200">
+                                                    Invited
+                                                </span>
+                                            )}
+                                            {!isDisabled && (
+                                                <div className={`w-5 h-5 rounded-md border ${isSelected ? 'bg-blurple border-blurple' : 'border-discord-border/60'}`} />
+                                            )}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {incomingRoomInvite && (
+                <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                    <div className="w-[360px] max-w-[92vw] rounded-2xl border border-discord-border/60 bg-discord-darker shadow-2xl p-6 text-center space-y-4">
+                        <div className="w-16 h-16 rounded-full bg-discord-darkest mx-auto flex items-center justify-center text-2xl font-bold text-white overflow-hidden">
+                            {incomingRoomInvite.invitedByAvatar ? (
+                                <img src={incomingRoomInvite.invitedByAvatar} alt="" className="w-16 h-16 object-cover" />
+                            ) : (
+                                ((incomingRoomInvite.invitedByName || friends.find((f) => f._id === incomingRoomInvite.invitedBy)?.displayName) || 'C').charAt(0).toUpperCase()
+                            )}
+                        </div>
+                        <div>
+                            <p className="text-sm text-discord-faint uppercase tracking-[0.3em]">Call Invite</p>
+                            <p className="text-lg font-semibold text-white mt-2">
+                                {(incomingRoomInvite.invitedByName || friends.find((f) => f._id === incomingRoomInvite.invitedBy)?.displayName || 'Someone')} invited you to a call
+                            </p>
+                        </div>
+                        <div className="flex items-center justify-center gap-4">
+                            <button
+                                onClick={rejectRoomInvite}
+                                className="w-12 h-12 rounded-full bg-discord-darkest text-discord-faint hover:text-white flex items-center justify-center"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                            <button
+                                onClick={acceptRoomInvite}
+                                className="w-12 h-12 rounded-full bg-emerald-500/90 text-white flex items-center justify-center hover:bg-emerald-500"
+                            >
+                                <Phone className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {outgoingCall && !activeDmCall && (
                 <div className="dm-call-modal dm-call-modal--soft fixed inset-0 z-[70] flex items-center justify-center">
                     <div className="dm-call-card dm-call-card--outgoing w-[300px] rounded-3xl border border-discord-border/60 shadow-2xl p-6 text-center space-y-4">
                         <div className="dm-call-card__ambient" aria-hidden="true">
@@ -2180,6 +2631,59 @@ const FeedPage = () => {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {activeDmCall && !isViewingActiveCall && (
+                <div className="fixed bottom-6 left-6 z-[88] w-[320px] max-w-[80vw] rounded-2xl border border-discord-border/60 bg-discord-darker/95 shadow-2xl p-4">
+                    <div className="flex items-center gap-3">
+                        <div className="relative h-12 w-12 rounded-xl bg-discord-darkest overflow-hidden flex items-center justify-center text-sm font-semibold text-white">
+                            {activeCallEntry?.avatar ? (
+                                <img src={activeCallEntry.avatar} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                                activeCallTitle.charAt(0).toUpperCase()
+                            )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[11px] uppercase tracking-[0.32em] text-discord-faint">Call Active</p>
+                            <p className="text-sm font-semibold text-white truncate">{activeCallTitle}</p>
+                            <p className="text-xs text-discord-muted">
+                                {activeCallCount > 0 ? `${activeCallCount} in call` : 'Join the call'}
+                            </p>
+                        </div>
+                        <button
+                            onClick={returnToActiveCall}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-500/80 text-white text-xs font-semibold hover:bg-emerald-500"
+                        >
+                            Return
+                        </button>
+                    </div>
+                    {activeCallMembers.length > 0 && (
+                        <div className="mt-3 flex items-center -space-x-2">
+                            {activeCallMembers.slice(0, 5).map((member) => (
+                                <div
+                                    key={member.socketId || member.userId}
+                                    className="h-7 w-7 rounded-full border-2 border-discord-darker bg-discord-darkest overflow-hidden flex items-center justify-center text-[10px] font-semibold text-white"
+                                    title={member.displayName || 'Member'}
+                                >
+                                    {member.avatar ? (
+                                        <img src={member.avatar} alt="" className="h-full w-full object-cover" />
+                                    ) : (
+                                        (member.displayName || 'M').charAt(0).toUpperCase()
+                                    )}
+                                </div>
+                            ))}
+                            {activeCallMembers.length > 5 && (
+                                <span className="ml-2 text-xs text-discord-faint">+{activeCallMembers.length - 5}</span>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {callToast && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] rounded-full bg-discord-darkest/90 border border-discord-border/60 px-4 py-2 text-sm text-discord-light shadow-lg">
+                    {callToast}
                 </div>
             )}
 

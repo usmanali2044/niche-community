@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, ChevronRight, Copy, Moon, Pencil, User, XCircle, Sparkles } from 'lucide-react';
 
 const STATUS_OPTIONS = [
@@ -11,6 +11,11 @@ const STATUS_OPTIONS = [
 const ProfilePopout = ({ isOpen, onClose, anchorClassName = '', profile, user, onUpdatePresence, onEditProfile }) => {
     const [showStatusMenu, setShowStatusMenu] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [isBioExpanded, setIsBioExpanded] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) setIsBioExpanded(false);
+    }, [isOpen, profile?._id, user?._id]);
 
     if (!isOpen) return null;
 
@@ -19,6 +24,7 @@ const ProfilePopout = ({ isOpen, onClose, anchorClassName = '', profile, user, o
     const statusText = profile?.bio || 'No bio yet';
     const presence = profile?.presence || 'online';
     const isPremium = ['premium', 'enterprise'].includes(profile?.tier || user?.tier || 'free');
+    const showBioToggle = statusText.length > 140;
 
     const handleCopyId = async () => {
         try {
@@ -78,11 +84,23 @@ const ProfilePopout = ({ isOpen, onClose, anchorClassName = '', profile, user, o
                         </div>
                     </div>
 
-                    <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-discord-darkest text-sm text-discord-light">
-                        <span className={`w-2.5 h-2.5 rounded-full ${
+                    <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-2xl bg-discord-darkest text-sm text-discord-light">
+                        <span className={`mt-1 w-2.5 h-2.5 shrink-0 rounded-full ${
                             presence === 'dnd' ? 'bg-red-500' : presence === 'idle' ? 'bg-yellow-400' : presence === 'offline' ? 'bg-discord-faint/60' : 'bg-discord-green'
                         }`} />
-                        {statusText}
+                        <div className="flex-1 min-w-0">
+                            <p className={`leading-snug break-words ${isBioExpanded ? '' : 'line-clamp-3'}`}>
+                                {statusText}
+                            </p>
+                            {showBioToggle && (
+                                <button
+                                    onClick={() => setIsBioExpanded((v) => !v)}
+                                    className="mt-1 text-[11px] font-semibold text-blurple hover:text-blurple-hover"
+                                >
+                                    {isBioExpanded ? 'Show less' : 'Read more'}
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     <div className="mt-4 rounded-xl bg-discord-darkest/70 border border-discord-border/60 divide-y divide-discord-border/50 text-sm text-discord-light">
