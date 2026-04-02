@@ -2034,7 +2034,9 @@ const FeedPage = () => {
                             <button
                                 onClick={() => setActiveTab('add')}
                                 className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer ${
-                                    activeTab === 'add' ? 'bg-blurple text-white' : 'bg-discord-darkest text-discord-faint hover:bg-discord-darkest/60'
+                                    activeTab === 'add'
+                                        ? 'bg-blurple text-white'
+                                        : 'bg-blurple/35 text-blue-100 hover:bg-blurple/55'
                                 }`}
                             >
                                 Add Friend

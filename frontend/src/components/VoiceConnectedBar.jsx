@@ -1,4 +1,4 @@
-import { Headphones, Mic, PhoneOff, Radio, ScreenShare, Sparkles, AudioLines } from 'lucide-react';
+import { Headphones, Mic, PhoneOff, Radio, ScreenShare, AudioLines } from 'lucide-react';
 
 const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60).toString().padStart(1, '0');
@@ -58,7 +58,7 @@ const VoiceConnectedBar = ({
                 </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
                 <button
                     onClick={onToggleMute}
                     className={`h-9 rounded-md flex items-center justify-center transition-colors ${
@@ -76,17 +76,6 @@ const VoiceConnectedBar = ({
                         title={isSharing ? 'Stop sharing' : 'Share screen'}
                     >
                         <ScreenShare className="w-4 h-4" />
-                    </button>
-                )}
-                {onToggleNoiseReduction && (
-                    <button
-                        onClick={onToggleNoiseReduction}
-                        className={`h-9 rounded-md flex items-center justify-center transition-colors ${
-                            noiseReduction ? 'bg-discord-green/20 text-discord-green' : 'bg-discord-darkest text-discord-faint hover:bg-discord-border-light/40'
-                        }`}
-                        title={noiseReduction ? 'Noise reduction on' : 'Noise reduction off'}
-                    >
-                        <Sparkles className="w-4 h-4" />
                     </button>
                 )}
                 <button

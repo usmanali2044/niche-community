@@ -8,7 +8,7 @@ const profileSchema = new mongoose.Schema({
   bannerColor: { type: String, default: "#3f4f4f" },
   status: { type: String, default: "Eat Sleep Code Repeat" },
   presence: { type: String, enum: ["online", "idle", "dnd", "offline"], default: "online" },
-  bio: { type: String, default: "" },
+  bio: { type: String, default: "", maxlength: 200 },
   dataPrivacy: {
     improveData: { type: Boolean, default: true },
     personalizeActivity: { type: Boolean, default: true },

@@ -398,11 +398,11 @@ const ProfileSettingsModal = ({ isOpen, onClose, profile, user, onSave }) => {
                                                 value={bio}
                                                 onChange={(e) => setBio(e.target.value)}
                                                 rows={4}
-                                                maxLength={190}
+                                                maxLength={200}
                                                 className="w-full rounded-lg bg-discord-darkest border border-discord-border/60 text-discord-white px-3 py-3 focus:outline-none focus:border-blurple resize-none"
                                             />
                                             <span className="absolute bottom-2 right-3 text-xs text-discord-faint">
-                                                {190 - bio.length}
+                                                {200 - bio.length}
                                             </span>
                                         </div>
                                     </div>

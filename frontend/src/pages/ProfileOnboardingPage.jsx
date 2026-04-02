@@ -284,6 +284,7 @@ const ProfileOnboardingPage = () => {
                                         id="onboarding-bio"
                                         placeholder="Tell us about yourself, what you're working on, what drives you…"
                                         value={bio}
+                                        maxLength={200}
                                         onChange={(e) => {
                                             setBio(e.target.value);
                                             setErrors((p) => ({ ...p, bio: '' }));
@@ -306,7 +307,7 @@ const ProfileOnboardingPage = () => {
                                     )}
                                 </div>
                                 <p className="text-xs text-discord-faint text-center">
-                                    {bio.length} / 500 characters
+                                    {bio.length} / 200 characters
                                 </p>
                             </div>
                         )}

@@ -86,7 +86,15 @@ export const updateProfile = async (req, res) => {
         if (bannerColor !== undefined) updateData.bannerColor = bannerColor;
         if (status !== undefined) updateData.status = status;
         if (presence !== undefined) updateData.presence = presence;
-        if (bio !== undefined) updateData.bio = bio;
+        if (bio !== undefined) {
+            if (bio.length > 200) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Bio must be 200 characters or less",
+                });
+            }
+            updateData.bio = bio;
+        }
         if (dataPrivacy !== undefined) updateData.dataPrivacy = dataPrivacy;
         if (skills !== undefined) updateData.skills = skills;
         if (interests !== undefined) updateData.interests = interests;
